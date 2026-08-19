@@ -646,9 +646,102 @@ class AutoLoginService:
             self._log(f"❌ [401 Auto-Recovery] Lỗi ngoại lệ: {e}", level="error")
             return False, str(e)
 
+    async def auto_reauth_all_401(
+        self,
+        oauth_service: OauthService,
+        concurrency: int = 2,
+    ) -> dict[str, Any]:
+        """Scan DB for all accounts requiring reauth/401, match with Vault, and relogin them concurrently."""
+        from app.db.session import get_background_session
+        from app.db.models import Account, AccountStatus
+        from sqlalchemy import select
+
+        async with get_background_session() as db_session:
+            stmt = select(Account).where(
+                Account.status.in_([AccountStatus.UNAUTHORIZED, AccountStatus.REAUTH_REQUIRED, AccountStatus.DEACTIVATED])
+            )
+            result = await db_session.execute(stmt)
+            accounts_401 = list(result.scalars().all())
+
+        if not accounts_401:
+            return {
+                "total_401": 0,
+                "reauthed": 0,
+                "failed": 0,
+                "no_credentials": 0,
+                "message": "Không có tài khoản nào đang ở trạng thái lỗi 401.",
+            }
+
+        eligible_accounts: list[Account] = []
+        no_credentials_count = 0
+        now = time.time()
+
+        for acc in accounts_401:
+            norm_key = normalize_email_key(acc.email)
+            if norm_key not in self._vault:
+                no_credentials_count += 1
+                continue
+
+            last_attempt = getattr(self, "_reauth_cooldowns", {}).get(norm_key, 0)
+            if now - last_attempt < 300:  # 5 min cooldown for recent failure
+                continue
+            eligible_accounts.append(acc)
+
+        if not hasattr(self, "_reauth_cooldowns"):
+            self._reauth_cooldowns = {}
+
+        if not eligible_accounts:
+            return {
+                "total_401": len(accounts_401),
+                "reauthed": 0,
+                "failed": 0,
+                "no_credentials": no_credentials_count,
+                "message": f"Tìm thấy {len(accounts_401)} tài khoản 401 nhưng {no_credentials_count} tài khoản chưa lưu mật khẩu trong Vault.",
+            }
+
+        self._log(
+            f"⚡ [Auto-Reauth Batch] Bắt đầu tự động đăng nhập lại cho {len(eligible_accounts)} tài khoản 401 có mật khẩu lưu trong Vault...",
+            level="info",
+        )
+
+        reauthed_count = 0
+        failed_count = 0
+        semaphore = asyncio.Semaphore(max(1, min(concurrency, 4)))
+
+        async def attempt_one(account: Account):
+            nonlocal reauthed_count, failed_count
+            norm_key = normalize_email_key(account.email)
+            self._reauth_cooldowns[norm_key] = time.time()
+            async with semaphore:
+                success, _ = await self.relogin_single_account(
+                    email=account.email,
+                    oauth_service=oauth_service,
+                    headless=True,
+                )
+                if success:
+                    reauthed_count += 1
+                    self._reauth_cooldowns.pop(norm_key, None)
+                else:
+                    failed_count += 1
+
+        tasks = [asyncio.create_task(attempt_one(acc)) for acc in eligible_accounts]
+        await asyncio.gather(*tasks)
+
+        msg = f"Đã khôi phục thành công {reauthed_count}/{len(eligible_accounts)} tài khoản 401!"
+        self._log(f"🎉 [Auto-Reauth Batch] {msg} (Thất bại: {failed_count})", level="success" if reauthed_count > 0 else "warning")
+
+        return {
+            "total_401": len(accounts_401),
+            "reauthed": reauthed_count,
+            "failed": failed_count,
+            "no_credentials": no_credentials_count,
+            "message": msg,
+        }
+
 
 _AUTO_LOGIN_SINGLETON = AutoLoginService()
 
 
 def get_auto_login_service() -> AutoLoginService:
     return _AUTO_LOGIN_SINGLETON
+

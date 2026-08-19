@@ -47,7 +47,7 @@ import { AuthExportDialog } from "@/features/accounts/components/auth-export-dia
 import { ImportDialog } from "@/features/accounts/components/import-dialog";
 import { ReauthCredentialsDialog } from "@/features/accounts/components/reauth-credentials-dialog";
 import { ResetCreditConfirmDialog } from "@/features/accounts/components/reset-credit-confirm-dialog";
-import { launchCodexCli } from "@/features/accounts/api";
+import { launchCodexCli, autoReauthAll401 } from "@/features/accounts/api";
 import { useAccounts, useCodexActiveAccount } from "@/features/accounts/hooks/use-accounts";
 import { useOauth } from "@/features/accounts/hooks/use-oauth";
 import type {
@@ -307,6 +307,26 @@ export function AccountsGridPage() {
     }
   };
 
+  const [isAutoReauthingAll, setIsAutoReauthingAll] = useState(false);
+
+  const handleAutoReauthAll401 = async () => {
+    setIsAutoReauthingAll(true);
+    toast.info("Đang quét Vault và tự động đăng nhập lại các tài khoản 401 ngầm...");
+    try {
+      const res = await autoReauthAll401();
+      if (res.reauthed > 0) {
+        toast.success(res.message || `Đã tự động đăng nhập lại thành công ${res.reauthed} tài khoản!`);
+        void accountsQuery.refetch();
+      } else {
+        toast.warning(res.message || "Không có tài khoản nào được phục hồi.");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Lỗi khi chạy tự động đăng nhập lại");
+    } finally {
+      setIsAutoReauthingAll(false);
+    }
+  };
+
   const handleResetCredit = (accountId: string) => {
     const account = rawAccounts.find((item) => item.accountId === accountId);
     resetCreditDialog.show({
@@ -388,7 +408,6 @@ export function AccountsGridPage() {
             {t("accounts.grid.openCodex")}
           </Button>
 
-
           <Button
             type="button"
             variant="outline"
@@ -426,24 +445,73 @@ export function AccountsGridPage() {
 
       {/* 2. Stat badges */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div className="rounded-xl border bg-card p-3 shadow-sm">
+        <div
+          onClick={() => setStatusFilter("all")}
+          className={cn(
+            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-primary/50",
+            statusFilter === "all" && "border-primary ring-1 ring-primary/20",
+          )}
+        >
           <div className="text-xs text-muted-foreground font-medium">{t("accounts.grid.stats.total")}</div>
           <div className="text-xl font-bold text-foreground mt-1">{totalCount}</div>
         </div>
-        <div className="rounded-xl border bg-card p-3 shadow-sm">
+        <div
+          onClick={() => setStatusFilter("active")}
+          className={cn(
+            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-emerald-500/50",
+            statusFilter === "active" && "border-emerald-500 ring-1 ring-emerald-500/20",
+          )}
+        >
           <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{t("accounts.grid.stats.active")}</div>
           <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{activeCount}</div>
         </div>
-        <div className="rounded-xl border bg-card p-3 shadow-sm">
+        <div
+          onClick={() => setStatusFilter("exceeded")}
+          className={cn(
+            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-amber-500/50",
+            statusFilter === "exceeded" && "border-amber-500 ring-1 ring-amber-500/20",
+          )}
+        >
           <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">{t("accounts.grid.stats.exceeded")}</div>
           <div className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{exceededCount}</div>
         </div>
-        <div className="rounded-xl border bg-card p-3 shadow-sm">
+        <div
+          onClick={() => setStatusFilter("paused")}
+          className={cn(
+            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-muted-foreground/50",
+            statusFilter === "paused" && "border-muted-foreground ring-1 ring-muted-foreground/20",
+          )}
+        >
           <div className="text-xs text-muted-foreground font-medium">{t("accounts.grid.stats.paused")}</div>
           <div className="text-xl font-bold text-foreground/80 mt-1">{pausedCount}</div>
         </div>
-        <div className="rounded-xl border bg-card p-3 shadow-sm">
-          <div className="text-xs text-red-600 dark:text-red-400 font-medium">{t("accounts.grid.stats.reauth")}</div>
+        <div
+          onClick={() => setStatusFilter(statusFilter === "401" ? "all" : "401")}
+          className={cn(
+            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors relative overflow-hidden",
+            statusFilter === "401" ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5" : "hover:border-red-500/50",
+          )}
+        >
+          <div className="flex items-center justify-between gap-1">
+            <div className="text-xs text-red-600 dark:text-red-400 font-medium">{t("accounts.grid.stats.reauth")}</div>
+            {error401Count > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isAutoReauthingAll}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleAutoReauthAll401();
+                }}
+                className="h-6 px-2 text-[11px] font-semibold border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 shrink-0"
+                title="Tự động đăng nhập lại tất cả tài khoản 401 bằng mật khẩu trong Vault"
+              >
+                <Bot className={cn("mr-1 h-3 w-3", isAutoReauthingAll && "animate-spin")} />
+                {isAutoReauthingAll ? "Đang log..." : "Tự log lại"}
+              </Button>
+            ) : null}
+          </div>
           <div className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{error401Count}</div>
         </div>
       </div>

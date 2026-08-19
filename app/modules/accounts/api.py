@@ -167,6 +167,17 @@ async def append_auto_login(
     return await auto_login_service.append(accounts=payload.accounts)
 
 
+@router.post("/auto-reauth-all-401")
+async def auto_reauth_all_401_endpoint(
+    oauth_context: OauthContext = Depends(get_oauth_context),
+    _write_access=Depends(require_dashboard_write_access),
+) -> dict:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.auto_reauth_all_401(
+        oauth_service=oauth_context.service,
+        concurrency=2,
+    )
+
 
 @router.get("/{account_id}/trends", response_model=AccountTrendsResponse)
 async def get_account_trends(

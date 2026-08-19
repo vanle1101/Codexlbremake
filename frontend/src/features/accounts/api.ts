@@ -271,3 +271,10 @@ export function hasAccountCredentials(accountId: string) {
     `${ACCOUNTS_BASE_PATH}/${encodeURIComponent(accountId)}/has-credentials`,
   );
 }
+
+export function autoReauthAll401() {
+  return post<{ total_401: number; reauthed: number; failed: number; no_credentials: number; message: string }>(
+    `${ACCOUNTS_BASE_PATH}/auto-reauth-all-401`,
+    null,
+  );
+}
