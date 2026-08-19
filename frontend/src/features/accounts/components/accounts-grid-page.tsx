@@ -388,15 +388,6 @@ export function AccountsGridPage() {
             {t("accounts.grid.openCodex")}
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="border-primary/40 text-primary hover:bg-primary/10"
-            onClick={() => autoLoginDialog.show()}
-          >
-            <Bot className="mr-2 h-4 w-4 text-primary" />
-            {t("accounts.grid.autoLogin")}
-          </Button>
 
           <Button
             type="button"
