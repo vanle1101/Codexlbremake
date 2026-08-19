@@ -21,6 +21,11 @@ const DashboardPage = lazy(() =>
 const ReportsPage = lazy(() =>
   import("@/features/reports/components/reports-page").then((m) => ({ default: m.ReportsPage })),
 );
+const AccountsGridPage = lazy(() =>
+  import("@/features/accounts/components/accounts-grid-page").then((m) => ({
+    default: m.AccountsGridPage,
+  })),
+);
 const AccountsPage = lazy(() =>
   import("@/features/accounts/components/accounts-page").then((m) => ({ default: m.AccountsPage })),
 );
@@ -77,7 +82,9 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/accounts" element={<AccountsGridPage />} />
+            <Route path="/accounts-details" element={<AccountsPage />} />
+            <Route path="/accounts/details" element={<Navigate to="/accounts-details" replace />} />
             <Route path="/automations" element={<AutomationsPage />} />
             <Route path="/apis" element={<ApisPage />} />
             <Route path="/settings" element={<SettingsPage />} />

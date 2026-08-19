@@ -1,6 +1,7 @@
 import {
   Activity,
   Download,
+  Loader2,
   Pause,
   Play,
   RefreshCw,
@@ -26,11 +27,18 @@ import type {
   AccountSummary,
 } from "@/features/accounts/schemas";
 import { formatSingleUnitRemaining } from "@/utils/formatters";
+import { cn } from "@/lib/utils";
 
 export type AccountActionsProps = {
   account: AccountSummary;
   busy: boolean;
   readOnly?: boolean;
+  isCodexActive?: boolean;
+  isSwitching?: boolean;
+  isSwitchingAny?: boolean;
+  isAutoReauthing?: boolean;
+  onAutoReauth?: (accountId: string) => void;
+  onSwitchToCodex?: (accountId: string) => void;
   onPause: (accountId: string) => void;
   onResume: (accountId: string) => void;
   onProbe: (accountId: string) => void;
@@ -51,6 +59,12 @@ export function AccountActions({
   account,
   busy,
   readOnly = false,
+  isCodexActive = false,
+  isSwitching = false,
+  isSwitchingAny = false,
+  isAutoReauthing = false,
+  onAutoReauth,
+  onSwitchToCodex,
   onPause,
   onResume,
   onProbe,
@@ -133,6 +147,35 @@ export function AccountActions({
       </label>
 
       <div className="flex flex-wrap gap-2">
+        {onSwitchToCodex ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn(
+              "h-8 gap-1.5 text-xs transition-colors",
+              isSwitching
+                ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 cursor-wait"
+                : isCodexActive
+                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold"
+                  : "text-foreground hover:bg-emerald-500/10 hover:text-emerald-600",
+            )}
+            onClick={() => onSwitchToCodex(account.accountId)}
+            disabled={busy || readOnly || isSwitchingAny}
+          >
+            {isSwitching ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <Play className={cn("h-3.5 w-3.5", isCodexActive && "fill-emerald-500 text-emerald-500")} />
+            )}
+            {isSwitching
+              ? "Đang xoay tài khoản..."
+              : isCodexActive
+                ? "Đang chạy ChatGPT Desktop"
+                : "Xoay sang tài khoản này"}
+          </Button>
+        ) : null}
+
         {account.status === "paused" ? (
           <Button
             type="button"
@@ -157,6 +200,24 @@ export function AccountActions({
             {t("common.actions.pause")}
           </Button>
         )}
+
+        {showOperatorRecoveryAction && onAutoReauth ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/10"
+            onClick={() => onAutoReauth(account.accountId)}
+            disabled={busy || readOnly || isAutoReauthing}
+          >
+            {isAutoReauthing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {isAutoReauthing ? "Đang xử lý..." : "Tự động đăng nhập lại"}
+          </Button>
+        ) : null}
 
         {showOperatorRecoveryAction ? (
           <Button

@@ -53,10 +53,15 @@ certs/
 .agents/.personality_migration
 .agents/version.json
 .agents/log/
-.venv
-
 .omx/
 PROMPT.md
+.venv
+
 SUMMARY.md
 .superpowers/
 .agents/worktrees/
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.enc

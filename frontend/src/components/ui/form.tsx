@@ -152,7 +152,7 @@ function resolveValidationMessage(message: string): string {
     return english
   }
 
-  return i18n.getFixedT("zh-CN")(message)
+  return i18n.getFixedT("vi")(message)
 }
 
 function FormMessage({ className, ...props }: React.ComponentProps<"p">) {

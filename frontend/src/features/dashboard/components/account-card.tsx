@@ -18,6 +18,7 @@ import {
   quotaBarColor,
   quotaBarTrack,
 } from "@/utils/account-status";
+import { getPlanBadgeStyle } from "@/utils/plan-style";
 import {
   formatDateTimeInline,
   formatPercentNullable,
@@ -145,10 +146,14 @@ export function AccountCard({ account, showAccountId = false, readOnly = false, 
               ? <span className="privacy-blur">{title}</span>
               : title}
           </p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {planLabel}
-            {!emailSubtitle ? idSuffix : ""}
-          </p>
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border", getPlanBadgeStyle(account.planType))}>
+              {planLabel}
+            </span>
+            {!emailSubtitle && idSuffix ? (
+              <span className="text-xs text-muted-foreground">{idSuffix}</span>
+            ) : null}
+          </div>
           {emailSubtitle ? (
             <p
               className="mt-0.5 truncate text-xs text-muted-foreground"

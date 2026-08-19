@@ -8,12 +8,9 @@ function t(key: string, options?: Record<string, unknown>): string {
 }
 
 function getIntlLocale(): string {
-  const language = (i18n.resolvedLanguage ?? i18n.language ?? "en").toLowerCase();
-  if (language.startsWith("ko")) {
-    return "ko-KR";
-  }
-  if (language.startsWith("zh")) {
-    return "zh-CN";
+  const language = (i18n.resolvedLanguage ?? i18n.language ?? "vi").toLowerCase();
+  if (language.startsWith("vi")) {
+    return "vi-VN";
   }
   return "en-US";
 }

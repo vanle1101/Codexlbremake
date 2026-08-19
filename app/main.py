@@ -509,6 +509,8 @@ async def lifespan(app: FastAPI):
     await account_deletion_scheduler.start()
     await data_retention_scheduler.start()
     await telemetry_scheduler.start()
+    from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
+    get_codex_auto_switcher().start()
     if settings.metrics_enabled and PROMETHEUS_AVAILABLE:
         import uvicorn
 
@@ -727,6 +729,7 @@ async def lifespan(app: FastAPI):
         await account_deletion_scheduler.stop()
         await data_retention_scheduler.stop()
         await telemetry_scheduler.stop()
+        get_codex_auto_switcher().stop()
         # Release the scheduler leader lease only after every leader-gated
         # scheduler has stopped so no local tick re-acquires it; followers can
         # then take over immediately instead of waiting out the lease TTL.

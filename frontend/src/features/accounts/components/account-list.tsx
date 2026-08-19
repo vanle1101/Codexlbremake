@@ -29,9 +29,11 @@ const STATUS_FILTER_OPTIONS = ["all", "active", "paused", "rate_limited", "quota
 export type AccountListProps = {
   accounts: AccountSummary[];
   selectedAccountId: string | null;
+  isAccountActive?: (account: AccountSummary) => boolean;
   onSelect: (accountId: string) => void;
   onOpenImport: () => void;
   onOpenOauth: () => void;
+  onOpenAutoLogin?: () => void;
   sortMode?: AccountSortMode;
   onSortModeChange?: (sortMode: AccountSortMode) => void;
   showResetCreditBadges?: boolean;
@@ -41,9 +43,11 @@ export type AccountListProps = {
 export function AccountList({
   accounts,
   selectedAccountId,
+  isAccountActive,
   onSelect,
   onOpenImport,
   onOpenOauth,
+  onOpenAutoLogin,
   sortMode,
   onSortModeChange,
   showResetCreditBadges = true,
@@ -169,6 +173,7 @@ export function AccountList({
               key={account.accountId}
               account={account}
               selected={account.accountId === selectedAccountId}
+              isCodexActive={isAccountActive ? isAccountActive(account) : false}
               showAccountId={account.isEmailDuplicate === true}
               showResetCreditBadge={showResetCreditBadges}
               onSelect={onSelect}
@@ -188,6 +193,7 @@ export function AccountList({
         onOpenChange={setChooserOpen}
         onImport={onOpenImport}
         onAddAccount={onOpenOauth}
+        onAutoLogin={onOpenAutoLogin}
       />
     </div>
   );

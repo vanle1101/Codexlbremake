@@ -97,13 +97,13 @@ describe("AppearanceSettings", () => {
     expect(useAccountQuotaDisplayStore.getState().quotaDisplay).toBe("weekly");
   });
 
-  it("localizes the account burn projection row in zh-CN", async () => {
-    await i18n.changeLanguage("zh-CN");
+  it("localizes the account burn projection row in vi", async () => {
+    await i18n.changeLanguage("vi");
     try {
       render(<AppearanceSettings />);
 
-      expect(screen.getByText("账户消耗预测")).toBeInTheDocument();
-      expect(screen.getByText("在仪表盘上显示账户等效预测卡片。")).toBeInTheDocument();
+      expect(screen.getByText("Dự báo tiêu hao tài khoản")).toBeInTheDocument();
+      expect(screen.getByText("Hiển thị thẻ dự báo tương đương tài khoản trên trang tổng quan.")).toBeInTheDocument();
       expect(screen.queryByText("Account burn projection")).not.toBeInTheDocument();
       expect(
         screen.queryByText("Show the account-equivalent projection card on the dashboard."),

@@ -71,7 +71,7 @@ describe("GuestAccessSettings", () => {
     const user = userEvent.setup();
     vi.mocked(setGuestPassword).mockRejectedValue(new Error("settings.password.validation.minLength"));
 
-    await i18n.changeLanguage("zh-CN");
+    await i18n.changeLanguage("vi");
 
     try {
       render(
@@ -83,10 +83,10 @@ describe("GuestAccessSettings", () => {
         />,
       );
 
-      await user.type(screen.getByPlaceholderText("可选访客密码"), "short");
-      await user.click(screen.getByRole("button", { name: "保存" }));
+      await user.type(screen.getByPlaceholderText("Mật khẩu khách tùy chọn"), "short");
+      await user.click(screen.getByRole("button", { name: "Lưu" }));
 
-      expect(await screen.findByText("密码至少需要 8 个字符。")).toBeInTheDocument();
+      expect(await screen.findByText("Mật khẩu phải có ít nhất 8 ký tự.")).toBeInTheDocument();
       expect(screen.queryByText("settings.password.validation.minLength")).not.toBeInTheDocument();
     } finally {
       await i18n.changeLanguage("en");
@@ -100,7 +100,7 @@ describe("GuestAccessSettings", () => {
       return Promise.resolve({ status: "ok" });
     });
 
-    await i18n.changeLanguage("zh-CN");
+    await i18n.changeLanguage("vi");
 
     try {
       render(
@@ -112,10 +112,10 @@ describe("GuestAccessSettings", () => {
         />,
       );
 
-      await user.type(screen.getByPlaceholderText("可选访客密码"), "short");
-      await user.click(screen.getByRole("button", { name: "保存" }));
+      await user.type(screen.getByPlaceholderText("Mật khẩu khách tùy chọn"), "short");
+      await user.click(screen.getByRole("button", { name: "Lưu" }));
 
-      expect(await screen.findByText("密码至少需要 8 个字符。")).toBeInTheDocument();
+      expect(await screen.findByText("Mật khẩu phải có ít nhất 8 ký tự.")).toBeInTheDocument();
       expect(screen.queryByText("settings.password.validation.minLength")).not.toBeInTheDocument();
     } finally {
       await i18n.changeLanguage("en");

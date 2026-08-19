@@ -23,6 +23,7 @@ import type {
   UpstreamProxyEndpointTestResponse,
 } from "@/features/settings/schemas";
 import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { getPlanBadgeStyle } from "@/utils/plan-style";
 import { formatSlug } from "@/utils/formatters";
 
 export type AccountDetailProps = {
@@ -30,6 +31,12 @@ export type AccountDetailProps = {
   showAccountId?: boolean;
   busy: boolean;
   readOnly?: boolean;
+  isCodexActive?: boolean;
+  isSwitching?: boolean;
+  isSwitchingAny?: boolean;
+  isAutoReauthing?: boolean;
+  onAutoReauth?: (accountId: string) => void;
+  onSwitchToCodex?: (accountId: string) => void;
   onPause: (accountId: string) => void;
   onResume: (accountId: string) => void;
   onProbe: (accountId: string) => void;
@@ -59,6 +66,12 @@ export function AccountDetail({
   showAccountId = false,
   busy,
   readOnly = false,
+  isCodexActive = false,
+  isSwitching = false,
+  isSwitchingAny = false,
+  isAutoReauthing = false,
+  onAutoReauth,
+  onSwitchToCodex,
   onPause,
   onResume,
   onProbe,
@@ -147,9 +160,20 @@ export function AccountDetail({
             {showAccountId ? ` | ID ${compactId}` : ""}
           </p>
         ) : null}
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {workspaceLabel} | {formatSlug(account.planType)}{seatLabel}
-        </p>
+        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+          <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border", getPlanBadgeStyle(account.planType))}>
+            {formatSlug(account.planType)}
+          </span>
+          {isCodexActive ? (
+            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Hiện tại
+            </span>
+          ) : null}
+          <span className="text-xs text-muted-foreground">
+            {workspaceLabel}{seatLabel}
+          </span>
+        </div>
       </div>
 
       {onProxyBindingSave ? (
@@ -176,6 +200,12 @@ export function AccountDetail({
         account={account}
         busy={busy}
         readOnly={readOnly}
+        isCodexActive={isCodexActive}
+        isSwitching={isSwitching}
+        isSwitchingAny={isSwitchingAny}
+        isAutoReauthing={isAutoReauthing}
+        onAutoReauth={onAutoReauth}
+        onSwitchToCodex={onSwitchToCodex}
         onPause={onPause}
         onResume={onResume}
         onProbe={onProbe}

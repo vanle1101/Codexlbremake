@@ -124,54 +124,54 @@ describe("PasswordSettings", () => {
     expect(await screen.findByText("setup failed")).toBeInTheDocument();
   });
 
-  it("shows translated validation errors in zh-CN during setup", async () => {
+  it("shows translated validation errors in vi during setup", async () => {
     const user = userEvent.setup();
-    await i18n.changeLanguage("zh-CN");
+    await i18n.changeLanguage("vi");
     try {
       render(<PasswordSettings />);
 
-      await user.click(screen.getByRole("button", { name: "设置密码" }));
-      await user.type(screen.getByLabelText("密码"), "short");
+      await user.click(screen.getByRole("button", { name: "Thiết lập mật khẩu" }));
+      await user.type(screen.getByLabelText("Mật khẩu"), "short");
       await user.click(
         screen
-          .getAllByRole("button", { name: "设置密码" })
+          .getAllByRole("button", { name: "Thiết lập mật khẩu" })
           .find((btn) => btn.getAttribute("type") === "submit")!,
       );
 
-      expect(await screen.findByText("密码至少需要 8 个字符。")).toBeInTheDocument();
+      expect(await screen.findByText("Mật khẩu phải có ít nhất 8 ký tự.")).toBeInTheDocument();
     } finally {
       await i18n.changeLanguage("en");
     }
   });
 
-  it("shows translated required validation in zh-CN during remove", async () => {
+  it("shows translated required validation in vi during remove", async () => {
     const user = userEvent.setup();
-    await i18n.changeLanguage("zh-CN");
+    await i18n.changeLanguage("vi");
     try {
       useAuthStore.setState({ passwordRequired: true, passwordSessionActive: true });
       render(<PasswordSettings />);
 
-      await user.click(screen.getByRole("button", { name: "移除" }));
-      await user.click(screen.getByRole("button", { name: "移除密码" }));
+      await user.click(screen.getByRole("button", { name: "Gỡ bỏ" }));
+      await user.click(screen.getByRole("button", { name: "Gỡ bỏ mật khẩu" }));
 
-      expect(await screen.findByText("此项不能为空。")).toBeInTheDocument();
+      expect(await screen.findByText("Mục này không được để trống.")).toBeInTheDocument();
       expect(screen.queryByText("settings.password.validation.required")).not.toBeInTheDocument();
     } finally {
       await i18n.changeLanguage("en");
     }
   });
 
-  it("shows translated required validation in zh-CN during verify", async () => {
+  it("shows translated required validation in vi during verify", async () => {
     const user = userEvent.setup();
-    await i18n.changeLanguage("zh-CN");
+    await i18n.changeLanguage("vi");
     try {
       useAuthStore.setState({ passwordRequired: true, authenticated: true, passwordSessionActive: false });
       render(<PasswordSettings />);
 
-      await user.click(screen.getByRole("button", { name: "登录以管理" }));
-      await user.click(screen.getByRole("button", { name: "验证" }));
+      await user.click(screen.getByRole("button", { name: "Đăng nhập để quản lý" }));
+      await user.click(screen.getByRole("button", { name: "Xác minh" }));
 
-      expect(await screen.findByText("此项不能为空。")).toBeInTheDocument();
+      expect(await screen.findByText("Mục này không được để trống.")).toBeInTheDocument();
       expect(screen.queryByText("String must contain at least 1 character(s)")).not.toBeInTheDocument();
     } finally {
       await i18n.changeLanguage("en");

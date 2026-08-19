@@ -15,6 +15,7 @@ import type {
 } from "@/features/accounts/schemas";
 import { normalizeStatus } from "@/utils/account-status";
 import { formatCompactAccountId } from "@/utils/account-identifiers";
+import { getPlanBadgeStyle } from "@/utils/plan-style";
 import {
   formatDateTimeInline,
   formatPercentNullable,
@@ -25,6 +26,7 @@ import {
 export type AccountListItemProps = {
   account: AccountSummary;
   selected: boolean;
+  isCodexActive?: boolean;
   showAccountId?: boolean;
   showResetCreditBadge?: boolean;
   onSelect: (accountId: string) => void;
@@ -33,6 +35,7 @@ export type AccountListItemProps = {
 export function AccountListItem({
   account,
   selected,
+  isCodexActive = false,
   showAccountId = false,
   showResetCreditBadge = true,
   onSelect,
@@ -109,9 +112,20 @@ export function AccountListItem({
               title
             )}
           </p>
-          <p className="truncate text-xs text-muted-foreground" title={showAccountId ? t("accounts.detail.accountIdTitle", { accountId: account.accountId }) : undefined}>
-            {emailSubtitle ? <><span className={blurred ? "privacy-blur" : undefined}>{emailSubtitle}</span> | {slotSubtitle}{idSuffix}</> : <>{slotSubtitle}{idSuffix}</>}
-          </p>
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border", getPlanBadgeStyle(account.planType))}>
+              {formatSlug(account.planType)}
+            </span>
+            {isCodexActive ? (
+              <span className="inline-flex items-center gap-1 rounded border border-emerald-500/50 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Hiện tại
+              </span>
+            ) : null}
+            <span className="truncate text-xs text-muted-foreground" title={showAccountId ? t("accounts.detail.accountIdTitle", { accountId: account.accountId }) : undefined}>
+              {emailSubtitle ? <><span className={blurred ? "privacy-blur" : undefined}>{emailSubtitle}</span> | {workspaceLabel}{seatLabel}{idSuffix}</> : <>{workspaceLabel}{seatLabel}{idSuffix}</>}
+            </span>
+          </div>
         </div>
         {showRoutingPolicy ? (
           <RoutingPolicyBadge

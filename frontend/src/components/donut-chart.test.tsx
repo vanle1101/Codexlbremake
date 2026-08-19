@@ -116,17 +116,17 @@ describe("DonutChart", () => {
     expect(screen.getByTestId("donut-used-value")).toHaveTextContent("300");
   });
 
-  it("keeps compact values in K/M/B notation for zh-CN", async () => {
-    await i18n.changeLanguage("zh-CN");
+  it("keeps compact values in K/M/B notation for vi", async () => {
+    await i18n.changeLanguage("vi");
     try {
       render(
         <DonutChart
-          title="每周积分"
+          title="Điểm tín dụng hàng tuần"
           total={146_160}
           centerLayout="credits"
           items={[
-            { label: "账户 A", value: 46_400, color: "#7bb661" },
-            { label: "账户 B", value: 42_300, color: "#d9a441" },
+            { label: "Tài khoản A", value: 46_400, color: "#7bb661" },
+            { label: "Tài khoản B", value: 42_300, color: "#d9a441" },
           ]}
         />,
       );

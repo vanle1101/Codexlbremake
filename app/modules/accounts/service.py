@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from datetime import timedelta
+from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
@@ -48,6 +50,7 @@ from app.modules.accounts.schemas import (
     AccountAdditionalWindow,
     AccountAuthExportResponse,
     AccountAuthExportTokens,
+    AccountAutoReauthResponse,
     AccountExportResponse,
     AccountImportResponse,
     AccountOpenCodeAuthExportAccount,
@@ -61,8 +64,10 @@ from app.modules.accounts.schemas import (
     AccountUsageResetCreditsResponse,
     CodexAuthJson,
     CodexAuthTokens,
+    CodexActiveAccountResponse,
     OpenCodeAuthJson,
     OpenCodeOAuthAuth,
+    SwitchToCodexResponse,
 )
 from app.modules.limit_warmup.repository import LimitWarmupRepository
 from app.modules.proxy.account_cache import (
@@ -510,6 +515,104 @@ class AccountsService:
             opencode_auth_json=opencode_auth_json,
         )
 
+    async def switch_to_codex(self, account_id: str) -> SwitchToCodexResponse:
+        auth_data = await self.export_auth(account_id)
+        if auth_data is None:
+            raise DashboardNotFoundError("Account not found", code="account_not_found")
+
+        codex_home = Path.home() / ".codex"
+        codex_home.mkdir(parents=True, exist_ok=True)
+
+        auth_file = codex_home / "auth.json"
+        projection_file = codex_home / ".cockpit_codex_auth.json"
+
+        # Build auth.json payload for Codex CLI / Codex App
+        payload = {
+            "OPENAI_API_KEY": None,
+            "last_refresh": auth_data.codex_auth_json.last_refresh,
+            "tokens": {
+                "access_token": auth_data.codex_auth_json.tokens.access_token,
+                "account_id": auth_data.codex_auth_json.tokens.account_id,
+                "id_token": auth_data.codex_auth_json.tokens.id_token,
+                "refresh_token": auth_data.codex_auth_json.tokens.refresh_token,
+            },
+        }
+
+        auth_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+        # Write .cockpit_codex_auth.json projection
+        projection = {
+            "version": 1,
+            "writer": "codex-lb",
+            "account_id": auth_data.account.account_id,
+            "email": auth_data.account.email,
+            "token_generation": 1,
+            "written_at": int(time.time()),
+        }
+        projection_file.write_text(json.dumps(projection, indent=2), encoding="utf-8")
+
+        logger.info(f"Switched Codex active account to: {auth_data.account.email} (id: {auth_data.account.account_id})")
+
+        # Terminate running ChatGPT Desktop App and restart it with the new auth.json
+        try:
+            import subprocess
+            # Force kill running ChatGPT instances so it re-reads auth.json on launch
+            subprocess.run(
+                ["taskkill", "/F", "/IM", "ChatGPT.exe"],
+                capture_output=True,
+                check=False,
+            )
+            time.sleep(0.4)
+            # Launch fresh ChatGPT Desktop App with new auth tokens
+            subprocess.Popen(
+                'explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+                shell=True,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to restart ChatGPT Desktop app: {e}")
+
+        return SwitchToCodexResponse(
+            status="success",
+            account_id=auth_data.account.account_id,
+            email=auth_data.account.email,
+            auth_path=str(auth_file),
+            message=f"Đã xoay sang tài khoản {auth_data.account.email} và khởi động lại ChatGPT Desktop!",
+        )
+
+    def get_active_codex_account(self) -> CodexActiveAccountResponse:
+        try:
+            codex_home = Path.home() / ".codex"
+            projection_file = codex_home / ".cockpit_codex_auth.json"
+            if projection_file.exists():
+                data = json.loads(projection_file.read_text(encoding="utf-8"))
+                if data.get("email"):
+                    return CodexActiveAccountResponse(
+                        email=data.get("email"),
+                        account_id=data.get("account_id"),
+                        is_active=True,
+                    )
+            auth_file = codex_home / "auth.json"
+            if auth_file.exists():
+                data = json.loads(auth_file.read_text(encoding="utf-8"))
+                tokens = data.get("tokens") or {}
+                id_token = tokens.get("id_token") or tokens.get("access_token")
+                if id_token:
+                    parts = id_token.split(".")
+                    if len(parts) >= 2:
+                        import base64
+                        padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                        claims = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+                        email = claims.get("email") or (claims.get("https://api.openai.com/profile") or {}).get("email")
+                        if email:
+                            return CodexActiveAccountResponse(
+                                email=email,
+                                account_id=tokens.get("account_id"),
+                                is_active=True,
+                            )
+        except Exception as e:
+            logger.debug(f"Could not read active codex account: {e}")
+        return CodexActiveAccountResponse(is_active=False)
+
     async def import_account(self, raw: bytes) -> AccountImportResponse:
         try:
             auth = parse_auth_json(raw)
@@ -855,6 +958,66 @@ class AccountsService:
                 exc,
             )
             return PROBE_NETWORK_FAILURE_STATUS
+
+    async def auto_reauth_account(
+        self,
+        account_id: str,
+        oauth_service: Any,
+    ) -> AccountAutoReauthResponse:
+        account = await self._get_visible_account(account_id)
+        if account is None:
+            return AccountAutoReauthResponse(
+                success=False,
+                status="not_found",
+                message="Không tìm thấy tài khoản.",
+            )
+
+        # 1. Try refreshing token if auth manager is available
+        if self._auth_manager is not None:
+            try:
+                refreshed = await self._auth_manager.ensure_fresh(account, force=True)
+                if refreshed.status == AccountStatus.ACTIVE:
+                    await self._repo.update_status(account.id, AccountStatus.ACTIVE, None)
+                    get_account_selection_cache().invalidate()
+                    return AccountAutoReauthResponse(
+                        success=True,
+                        status="active",
+                        message=f"Đã làm mới token thành công cho {account.email}!",
+                    )
+            except Exception as e:
+                logger.info("Token refresh retry failed for %s: %s", account.email, e)
+
+        # 2. If token refresh is not viable, try Auto-Login using saved credentials in Vault
+        from app.modules.accounts.auto_login import get_auto_login_service
+        auto_login_service = get_auto_login_service()
+
+        if auto_login_service.has_credential(account.email):
+            success, err = await auto_login_service.relogin_single_account(
+                email=account.email,
+                oauth_service=oauth_service,
+                headless=True,
+            )
+            if success:
+                get_account_selection_cache().invalidate()
+                return AccountAutoReauthResponse(
+                    success=True,
+                    status="active",
+                    message=f"Đã tự động đăng nhập lại thành công cho {account.email}!",
+                )
+            else:
+                return AccountAutoReauthResponse(
+                    success=False,
+                    status="reauth_required",
+                    message=f"Tự động đăng nhập lại thất bại: {err}",
+                    needs_credentials=False,
+                )
+
+        return AccountAutoReauthResponse(
+            success=False,
+            status="reauth_required",
+            message=f"Token đã hết hạn và chưa có mật khẩu lưu cho {account.email}. Vui lòng nhập mật khẩu để tự động đăng nhập hoặc bấm Ủy quyền OAuth.",
+            needs_credentials=True,
+        )
 
 
 def _opencode_auth_export_filename(account: Account) -> str:

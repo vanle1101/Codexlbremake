@@ -4,6 +4,7 @@ export type DialogState<T = void> = T extends void
   ? {
       open: boolean;
       onOpenChange: (open: boolean) => void;
+      setOpen: (open: boolean) => void;
       show: () => void;
       hide: () => void;
     }
@@ -11,6 +12,7 @@ export type DialogState<T = void> = T extends void
       open: boolean;
       data: T | null;
       onOpenChange: (open: boolean) => void;
+      setOpen: (open: boolean) => void;
       show: (data: T) => void;
       hide: () => void;
     };
@@ -40,5 +42,5 @@ export function useDialogState<T = void>(): DialogState<T> {
     [hide],
   );
 
-  return { open, data, onOpenChange, show, hide } as DialogState<T>;
+  return { open, data, onOpenChange, setOpen: onOpenChange, show, hide } as DialogState<T>;
 }

@@ -127,8 +127,9 @@ class AccountSummary(DashboardModel):
     is_email_duplicate: bool = False
     # Banked rate-limit reset credits from the in-memory snapshot when cached,
     # otherwise the latest persisted primary usage_history count from /wham/usage.
-    available_reset_credits: int = 0
+    available_reset_credits: int | None = None
     reset_credit_nearest_expires_at: datetime | None = None
+    created_at: datetime | None = None
 
 
 class AccountsResponse(DashboardModel):
@@ -323,3 +324,60 @@ class AccountAliasRequest(DashboardModel):
 class AccountAliasResponse(DashboardModel):
     account_id: str
     alias: str | None = None
+
+
+class AutoLoginAccountItem(DashboardModel):
+    email: str
+    password: str
+    two_factor_secret: str | None = None
+    status: str = "PENDING"
+    error: str | None = None
+
+
+class AutoLoginStartRequest(DashboardModel):
+    accounts: list[AutoLoginAccountItem]
+    delay_seconds: int = Field(default=2, ge=0, le=60)
+    concurrency: int = Field(default=3, ge=1, le=10)
+    headless: bool = True
+
+
+class AutoLoginLogItem(DashboardModel):
+    timestamp: str
+    message: str
+    level: str = "info"
+
+
+class AutoLoginStateResponse(DashboardModel):
+    status: str
+    current_index: int
+    queue: list[AutoLoginAccountItem]
+    logs: list[AutoLoginLogItem]
+    concurrency: int = 5
+    delay_seconds: int = 2
+
+
+class SwitchToCodexResponse(DashboardModel):
+    status: str
+    account_id: str
+    email: str
+    auth_path: str
+    message: str
+
+
+class CodexActiveAccountResponse(DashboardModel):
+    email: str | None = None
+    account_id: str | None = None
+    is_active: bool = False
+
+
+class AccountSaveCredentialsRequest(DashboardModel):
+    email: str
+    password: str
+    two_factor_secret: str | None = None
+
+
+class AccountAutoReauthResponse(DashboardModel):
+    success: bool
+    status: str
+    message: str
+    needs_credentials: bool = False

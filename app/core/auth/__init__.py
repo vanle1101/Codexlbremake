@@ -5,6 +5,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -121,6 +122,10 @@ class IdTokenClaims(BaseModel):
         ),
     )
     exp: int | float | str | None = None
+    profile: dict[str, Any] | None = Field(
+        default=None,
+        alias="https://api.openai.com/profile",
+    )
     auth: OpenAIAuthClaims | None = Field(
         default=None,
         alias="https://api.openai.com/auth",
@@ -151,6 +156,22 @@ def resolve_seat_identity(claims: "IdTokenClaims", auth_claims: "OpenAIAuthClaim
 
 def parse_auth_json(raw: bytes) -> AuthFile:
     data = json.loads(raw)
+    
+    # Hỗ trợ nạp trực tiếp file JSON lấy từ https://chatgpt.com/api/auth/session
+    if isinstance(data, dict) and ("accessToken" in data or "user" in data):
+        access_token = data.get("accessToken") or data.get("access_token") or ""
+        user = data.get("user") or {}
+        data = {
+            "OPENAI_API_KEY": None,
+            "tokens": {
+                "access_token": access_token,
+                "refresh_token": access_token,
+                "id_token": access_token,
+                "account_id": user.get("id"),
+            },
+            "last_refresh": data.get("expires"),
+        }
+
     model = AuthFile.model_validate(data)
     return model
 
@@ -175,9 +196,13 @@ def claims_from_auth(auth: AuthFile) -> AccountClaims:
     claims = extract_id_token_claims(auth.tokens.id_token)
     auth_claims = claims.auth or OpenAIAuthClaims()
     plan_type = auth_claims.chatgpt_plan_type or claims.chatgpt_plan_type
+    extracted_email = claims.email
+    if not extracted_email and isinstance(claims.profile, dict):
+        extracted_email = claims.profile.get("email")
+
     return AccountClaims(
         account_id=auth.tokens.account_id or auth_claims.chatgpt_account_id or claims.chatgpt_account_id,
-        email=claims.email,
+        email=extracted_email,
         plan_type=plan_type,
         workspace_id=clean_account_identity_part(auth_claims.workspace_id or claims.workspace_id),
         workspace_label=clean_account_identity_part(auth_claims.workspace_label or claims.workspace_label),

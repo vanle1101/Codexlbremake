@@ -1,21 +1,25 @@
-import { Suspense, lazy, useCallback, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AlertMessage } from "@/components/alert-message";
 import { LoadingOverlay } from "@/components/layout/loading-overlay";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { AccountDetail } from "@/features/accounts/components/account-detail";
 import { AccountList } from "@/features/accounts/components/account-list";
 import { AccountsSkeleton } from "@/features/accounts/components/accounts-skeleton";
 import { ImportDialog } from "@/features/accounts/components/import-dialog";
+import { ReauthCredentialsDialog } from "@/features/accounts/components/reauth-credentials-dialog";
 import { ResetCreditConfirmDialog } from "@/features/accounts/components/reset-credit-confirm-dialog";
 import { AuthExportDialog } from "@/features/accounts/components/auth-export-dialog";
 import {
   useAccounts,
   useAccountUsageResetCredits,
+  useCodexActiveAccount,
 } from "@/features/accounts/hooks/use-accounts";
 import {
   DEFAULT_ACCOUNT_SORT_MODE,
@@ -25,13 +29,20 @@ import {
 import { useOauth } from "@/features/accounts/hooks/use-oauth";
 import { useSettings, useUpstreamProxyAdmin } from "@/features/settings/hooks/use-settings";
 import { useAccountQuotaDisplayStore } from "@/hooks/use-account-quota-display";
-import type { AccountAuthExportResponse } from "@/features/accounts/schemas";
+import { getAutoLoginStatus } from "@/features/accounts/api";
+import type { AccountAuthExportResponse, AutoLoginStateResponse } from "@/features/accounts/schemas";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import { getErrorMessageOrNull } from "@/utils/errors";
 
 const OauthDialog = lazy(() =>
   import("@/features/accounts/components/oauth-dialog").then((m) => ({
     default: m.OauthDialog,
+  })),
+);
+
+const AutoLoginDialog = lazy(() =>
+  import("@/features/accounts/components/auto-login-dialog").then((m) => ({
+    default: m.AutoLoginDialog,
   })),
 );
 
@@ -53,7 +64,10 @@ export function AccountsPage() {
     deleteMutation,
     routingPolicyMutation,
     exportAuthMutation,
+    switchToCodexMutation,
+    autoReauthMutation,
   } = useAccounts();
+  const { data: codexActive } = useCodexActiveAccount();
   const { settingsQuery } = useSettings();
   const { upstreamProxyQuery, accountBindingMutation, testEndpointMutation } = useUpstreamProxyAdmin();
   const oauth = useOauth();
@@ -61,12 +75,51 @@ export function AccountsPage() {
 
   const importDialog = useDialogState();
   const oauthDialog = useDialogState();
+  const autoLoginDialog = useDialogState();
+  const reauthDialog = useDialogState<AccountSummary>();
   const deleteDialog = useDialogState<string>();
   type ResetCreditDialogTarget = { accountId: string; availableResetCredits: number };
   const resetCreditDialog = useDialogState<ResetCreditDialogTarget>();
   const usageResetDialog = useDialogState<string>();
   const exportDialog = useDialogState<AccountAuthExportResponse>();
   const [deleteHistory, setDeleteHistory] = useState(false);
+  const [autoLoginState, setAutoLoginState] = useState<AutoLoginStateResponse | null>(null);
+  const autoLoginCheckedOnMountRef = useRef(false);
+
+  // Polling auto-login status to sync background state & floating progress bar
+  useEffect(() => {
+    let active = true;
+
+    const poll = async () => {
+      try {
+        const state = await getAutoLoginStatus();
+        if (!active) return;
+        setAutoLoginState(state);
+
+        // Auto-show dialog only on initial load/mount if running or paused
+        if (!autoLoginCheckedOnMountRef.current) {
+          autoLoginCheckedOnMountRef.current = true;
+          if (state.status === "running" || state.status === "paused") {
+            autoLoginDialog.show();
+          }
+        }
+      } catch {
+        // ignore transient network error
+      }
+    };
+
+    void poll();
+    const interval = setInterval(poll, 2000);
+
+    const handleOpen = () => autoLoginDialog.show();
+    window.addEventListener("open-auto-login-dialog", handleOpen);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("open-auto-login-dialog", handleOpen);
+    };
+  }, [autoLoginDialog]);
 
   const accounts = useMemo(
     () => accountsQuery.data ?? [],
@@ -178,6 +231,12 @@ export function AccountsPage() {
               <AccountList
                 accounts={accounts}
                 selectedAccountId={resolvedSelectedAccountId}
+                isAccountActive={(acc) =>
+                  !!codexActive?.email &&
+                  (codexActive.email === acc.email ||
+                    codexActive.accountId === acc.accountId ||
+                    codexActive.account_id === acc.accountId)
+                }
                 onSelect={handleSelectAccount}
                 sortMode={accountSortMode}
                 onSortModeChange={setAccountSortMode}
@@ -187,6 +246,7 @@ export function AccountsPage() {
                   setOauthAccountId(null);
                   oauthDialog.show();
                 }}
+                onOpenAutoLogin={() => autoLoginDialog.show()}
                 readOnly={!canWrite}
               />
             </div>
@@ -197,6 +257,29 @@ export function AccountsPage() {
             showAccountId={selectedAccount?.isEmailDuplicate === true}
             busy={mutationBusy}
             readOnly={!canWrite}
+            isCodexActive={
+              !!selectedAccount &&
+              !!codexActive?.email &&
+              (codexActive.email === selectedAccount.email ||
+                codexActive.accountId === selectedAccount.accountId ||
+                codexActive.account_id === selectedAccount.accountId)
+            }
+            isSwitching={selectedAccount ? (switchToCodexMutation.isPending && switchToCodexMutation.variables === selectedAccount.accountId) : false}
+            isSwitchingAny={switchToCodexMutation.isPending}
+            isAutoReauthing={selectedAccount ? (autoReauthMutation.isPending && autoReauthMutation.variables === selectedAccount.accountId) : false}
+            onAutoReauth={async (id) => {
+              const acc = accounts.find((a) => a.accountId === id);
+              if (!acc) return;
+              try {
+                const res = await autoReauthMutation.mutateAsync(id);
+                if (res.needs_credentials || res.needsCredentials) {
+                  reauthDialog.show(acc);
+                }
+              } catch {
+                reauthDialog.show(acc);
+              }
+            }}
+            onSwitchToCodex={(id) => void switchToCodexMutation.mutateAsync(id)}
             onPause={(accountId) => void pauseMutation.mutateAsync(accountId)}
             onResume={(accountId) => void resumeMutation.mutateAsync(accountId)}
             onProbe={(accountId) => void probeMutation.mutateAsync({ accountId })}
@@ -282,6 +365,31 @@ export function AccountsPage() {
           onReset={oauth.reset}
         />
       </Suspense>
+
+      {autoLoginDialog.open ? (
+        <Suspense fallback={null}>
+          <AutoLoginDialog
+            open={autoLoginDialog.open}
+            onOpenChange={autoLoginDialog.onOpenChange}
+            onAccountAdded={async () => {
+              await accountsQuery.refetch();
+            }}
+          />
+        </Suspense>
+      ) : null}
+
+      <ReauthCredentialsDialog
+        open={reauthDialog.open}
+        onOpenChange={reauthDialog.onOpenChange}
+        account={reauthDialog.data}
+        onSuccess={() => void accountsQuery.refetch()}
+        onSwitchToOauth={() => {
+          if (reauthDialog.data) {
+            setOauthAccountId(reauthDialog.data.accountId);
+            oauthDialog.show();
+          }
+        }}
+      />
 
       <AuthExportDialog
         open={exportDialog.open}

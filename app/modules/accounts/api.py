@@ -22,7 +22,8 @@ from app.core.middleware.multipart_content_encoding import raise_for_unsupported
 from app.core.multipart import ACCOUNT_IMPORT_MULTIPART_POLICY, bounded_multipart_form, read_bounded_upload
 from app.core.multipart_fields import required_upload
 from app.core.upstream_proxy import UpstreamProxyRouteError
-from app.dependencies import AccountsContext, get_accounts_context, get_proxy_service_for_app
+from app.dependencies import AccountsContext, OauthContext, get_accounts_context, get_oauth_context, get_proxy_service_for_app
+from app.modules.accounts.auto_login import get_auto_login_service
 from app.modules.accounts.repository import AccountIdentityConflictError
 from app.modules.accounts.schemas import (
     AccountAliasRequest,
@@ -47,6 +48,12 @@ from app.modules.accounts.schemas import (
     AccountUsageResetConsumeRequest,
     AccountUsageResetConsumeResponse,
     AccountUsageResetCreditsResponse,
+    AccountAutoReauthResponse,
+    AccountSaveCredentialsRequest,
+    AutoLoginStartRequest,
+    AutoLoginStateResponse,
+    CodexActiveAccountResponse,
+    SwitchToCodexResponse,
 )
 from app.modules.accounts.service import (
     AccountNotProbableError,
@@ -103,6 +110,62 @@ async def list_accounts(
 ) -> AccountsResponse:
     accounts = await context.service.list_accounts()
     return AccountsResponse(accounts=accounts)
+
+
+@router.post("/auto-login/start", response_model=AutoLoginStateResponse)
+async def start_auto_login(
+    payload: AutoLoginStartRequest,
+    _write_access=Depends(require_dashboard_write_access),
+    oauth_context: OauthContext = Depends(get_oauth_context),
+) -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.start(
+        accounts=payload.accounts,
+        oauth_service=oauth_context.service,
+        delay_seconds=payload.delay_seconds,
+        concurrency=payload.concurrency,
+        headless=payload.headless,
+    )
+
+
+@router.get("/auto-login/status", response_model=AutoLoginStateResponse)
+async def get_auto_login_status() -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.get_state()
+
+
+@router.post("/auto-login/pause", response_model=AutoLoginStateResponse)
+async def pause_auto_login(
+    _write_access=Depends(require_dashboard_write_access),
+) -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.pause()
+
+
+@router.post("/auto-login/resume", response_model=AutoLoginStateResponse)
+async def resume_auto_login(
+    _write_access=Depends(require_dashboard_write_access),
+) -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.resume()
+
+
+@router.post("/auto-login/cancel", response_model=AutoLoginStateResponse)
+async def cancel_auto_login(
+    _write_access=Depends(require_dashboard_write_access),
+) -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.cancel()
+
+
+@router.post("/auto-login/append", response_model=AutoLoginStateResponse)
+async def append_auto_login(
+    payload: AutoLoginStartRequest,
+    _write_access=Depends(require_dashboard_write_access),
+) -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.append(accounts=payload.accounts)
+
 
 
 @router.get("/{account_id}/trends", response_model=AccountTrendsResponse)
@@ -244,6 +307,80 @@ async def export_account_opencode_auth(
         details={"account_id": account_id},
     )
     return result
+
+
+@router.post("/{account_id}/switch-to-codex", response_model=SwitchToCodexResponse)
+async def switch_account_to_codex(
+    request: Request,
+    account_id: str,
+    _write_access=Depends(require_dashboard_write_access),
+    context: AccountsContext = Depends(get_accounts_context),
+) -> SwitchToCodexResponse:
+    result = await context.service.switch_to_codex(account_id)
+    AuditService.log_async(
+        "account_switched_to_codex",
+        actor_ip=request.client.host if request.client else None,
+        details={"account_id": account_id, "email": result.email},
+    )
+    return result
+
+
+@router.get("/codex-active", response_model=CodexActiveAccountResponse)
+def get_current_active_codex_account(
+    context: AccountsContext = Depends(get_accounts_context),
+) -> CodexActiveAccountResponse:
+    return context.service.get_active_codex_account()
+
+
+@router.post("/launch-codex-cli")
+def launch_codex_cli():
+    import os
+    import subprocess
+
+    # Launch official ChatGPT Windows App
+    try:
+        subprocess.Popen(
+            'explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+            shell=True,
+        )
+    except Exception:
+        pass
+
+    codex_exe = r"C:\Users\acer\AppData\Local\OpenAI\Codex\bin\e305f1c75d8da435\codex.exe"
+    if not os.path.exists(codex_exe):
+        codex_exe = "codex"
+
+    try:
+        subprocess.Popen(
+            f'start cmd.exe /k title Codex CLI ^&^& "{codex_exe}"',
+            shell=True,
+        )
+        return {"status": "ok", "message": "Đã mở ứng dụng ChatGPT & Codex thành công!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/codex-auto-rotate/status")
+def get_codex_auto_rotate_status():
+    from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
+    switcher = get_codex_auto_switcher()
+    return {
+        "enabled": switcher.enabled,
+        "threshold_percent": switcher.threshold_percent,
+        "remaining_trigger_percent": round(100.0 - switcher.threshold_percent, 1),
+        "last_switch_info": switcher._last_switch_info,
+    }
+
+
+@router.post("/codex-auto-rotate/check")
+async def trigger_codex_auto_rotate_check():
+    from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
+    switcher = get_codex_auto_switcher()
+    res = await switcher.check_and_auto_rotate()
+    return {
+        "triggered": res is not None,
+        "result": res,
+    }
 
 
 @router.post(
@@ -454,3 +591,43 @@ async def delete_account(
         details={"account_id": account_id, "delete_history": delete_history},
     )
     return AccountDeleteResponse(status="deleted")
+
+
+@router.post("/{account_id}/auto-reauth", response_model=AccountAutoReauthResponse)
+async def auto_reauth_account_endpoint(
+    account_id: str,
+    context: AccountsContext = Depends(get_accounts_context),
+    oauth_context: OauthContext = Depends(get_oauth_context),
+    _write_access=Depends(require_dashboard_write_access),
+) -> AccountAutoReauthResponse:
+    return await context.service.auto_reauth_account(
+        account_id=account_id,
+        oauth_service=oauth_context.service,
+    )
+
+
+@router.post("/{account_id}/save-credentials")
+async def save_account_credentials_endpoint(
+    account_id: str,
+    payload: AccountSaveCredentialsRequest,
+    _write_access=Depends(require_dashboard_write_access),
+) -> dict[str, str]:
+    auto_login_service = get_auto_login_service()
+    auto_login_service.save_credential(
+        email=payload.email,
+        password=payload.password,
+        two_factor_secret=payload.two_factor_secret,
+    )
+    return {"status": "saved", "email": payload.email}
+
+
+@router.get("/{account_id}/has-credentials")
+async def has_account_credentials_endpoint(
+    account_id: str,
+    context: AccountsContext = Depends(get_accounts_context),
+) -> dict[str, bool]:
+    account = await context.service.get_account_detail(account_id)
+    if not account:
+        return {"has_credentials": False}
+    auto_login_service = get_auto_login_service()
+    return {"has_credentials": auto_login_service.has_credential(account.email)}

@@ -83,6 +83,10 @@ def build_dashboard_overview_summary(
     primary_window = build_usage_window_summary_model(usage_core.normalize_usage_window(primary_summary))
     secondary_window = build_usage_window_summary_model(usage_core.normalize_usage_window(secondary_summary))
 
+    total_tokens = activity_metrics.tokens
+    if total_tokens == 0 and secondary_summary.used_credits > 0:
+        total_tokens = int(secondary_summary.used_credits)
+
     return DashboardOverviewSummary(
         primary_window=primary_window,
         secondary_window=secondary_window,
@@ -93,7 +97,7 @@ def build_dashboard_overview_summary(
         metrics=DashboardUsageMetrics.model_validate(
             {
                 "requests": activity_metrics.requests,
-                "tokens": activity_metrics.tokens,
+                "tokens": total_tokens,
                 "cached_input_tokens": activity_metrics.cached_input_tokens,
                 "error_rate": activity_metrics.error_rate,
                 "error_count": activity_metrics.error_count,

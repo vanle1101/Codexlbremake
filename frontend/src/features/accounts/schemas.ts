@@ -102,6 +102,7 @@ export const AccountSummarySchema = z.object({
   isEmailDuplicate: z.boolean().optional(),
   availableResetCredits: z.number().nullable().optional(),
   resetCreditNearestExpiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  createdAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
 
 const RateLimitResetCreditItemSchema = z.object({
@@ -333,6 +334,26 @@ export const ImportStateSchema = z.object({
   message: z.string().nullable(),
 });
 
+export const SwitchToCodexResponseSchema = z.object({
+  status: z.string().optional(),
+  accountId: z.string().optional(),
+  account_id: z.string().optional(),
+  email: z.string().optional(),
+  authPath: z.string().optional(),
+  auth_path: z.string().optional(),
+  message: z.string().optional(),
+});
+
+export const CodexActiveAccountResponseSchema = z.object({
+  email: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  account_id: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+});
+
+
+
 export type UsageTrendPoint = z.infer<typeof UsageTrendPointSchema>;
 export type AccountSummary = z.infer<typeof AccountSummarySchema>;
 export type RateLimitResetCreditItem = z.infer<typeof RateLimitResetCreditItemSchema>;
@@ -381,3 +402,51 @@ export type RuntimeConnectAddressResponse = z.infer<
 >;
 export type OAuthState = z.infer<typeof OAuthStateSchema>;
 export type ImportState = z.infer<typeof ImportStateSchema>;
+
+export const AutoLoginAccountItemSchema = z.object({
+  email: z.string(),
+  password: z.string(),
+  twoFactorSecret: z.string().nullable().optional(),
+  two_factor_secret: z.string().nullable().optional(),
+  status: z.string().default("PENDING"),
+  error: z.string().nullable().optional(),
+});
+
+export const AutoLoginStartRequestSchema = z.object({
+  accounts: z.array(AutoLoginAccountItemSchema),
+  delay_seconds: z.number().int().min(0).max(60).default(2).optional(),
+  delaySeconds: z.number().int().min(0).max(60).default(2).optional(),
+  concurrency: z.number().int().min(1).max(10).default(3).optional(),
+  headless: z.boolean().default(true),
+});
+
+export const AutoLoginLogItemSchema = z.object({
+  timestamp: z.string(),
+  message: z.string(),
+  level: z.string().default("info"),
+});
+
+export const AutoLoginStateResponseSchema = z.object({
+  status: z.string(),
+  currentIndex: z.number().int().optional(),
+  current_index: z.number().int().optional(),
+  queue: z.array(AutoLoginAccountItemSchema),
+  logs: z.array(AutoLoginLogItemSchema),
+  concurrency: z.number().int().optional(),
+  delay_seconds: z.number().int().optional(),
+  delaySeconds: z.number().int().optional(),
+});
+
+export type AutoLoginAccountItem = z.infer<typeof AutoLoginAccountItemSchema>;
+export type AutoLoginStartRequest = z.infer<typeof AutoLoginStartRequestSchema>;
+export type AutoLoginLogItem = z.infer<typeof AutoLoginLogItemSchema>;
+export type AutoLoginStateResponse = z.infer<typeof AutoLoginStateResponseSchema>;
+
+export const AccountAutoReauthResponseSchema = z.object({
+  success: z.boolean(),
+  status: z.string(),
+  message: z.string(),
+  needs_credentials: z.boolean().optional(),
+  needsCredentials: z.boolean().optional(),
+});
+export type AccountAutoReauthResponse = z.infer<typeof AccountAutoReauthResponseSchema>;

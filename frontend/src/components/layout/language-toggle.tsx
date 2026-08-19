@@ -11,9 +11,8 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/i18n";
 
 const LANGUAGE_LABEL_KEY: Record<SupportedLanguage, string> = {
+  vi: "common.vietnamese",
   en: "common.english",
-  "zh-CN": "common.chinese",
-  ko: "common.korean",
 };
 
 export function LanguageToggle() {

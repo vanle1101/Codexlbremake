@@ -775,6 +775,37 @@ class UsageUpdater:
         mark_account_routing_unavailable(account.id)
         get_account_selection_cache().invalidate()
 
+        if (status == AccountStatus.REAUTH_REQUIRED or exc.status_code == 401) and account.email:
+            try:
+                from app.modules.accounts.auto_login import get_auto_login_service
+                auto_login = get_auto_login_service()
+                if auto_login.has_credential(account.email):
+                    logger.info("Auto-recovery: Found credentials in Vault for %s. Triggering automatic background re-login...", account.email)
+                    asyncio.create_task(self._auto_recover_reauth_account(account.email))
+            except Exception as auto_err:
+                logger.warning("Failed to trigger auto-recovery for %s: %s", account.email, auto_err)
+
+    async def _auto_recover_reauth_account(self, email: str) -> None:
+        try:
+            from app.modules.accounts.auto_login import get_auto_login_service
+            from app.modules.oauth.service import OAuthService
+            from app.modules.oauth.repository import OAuthRepository
+            from app.modules.accounts.repository import AccountsRepository
+            from app.db.session import get_background_session
+
+            auto_login = get_auto_login_service()
+            async with get_background_session() as session:
+                oauth_repo = OAuthRepository(session)
+                accounts_repo = AccountsRepository(session)
+                oauth_service = OAuthService(oauth_repo, accounts_repo)
+                success, err = await auto_login.relogin_single_account(email, oauth_service, headless=True)
+                if success:
+                    logger.info("Auto-recovery background re-login succeeded for %s", email)
+                else:
+                    logger.warning("Auto-recovery background re-login failed for %s: %s", email, err)
+        except Exception as exc:
+            logger.warning("Auto-recovery background task error for %s: %s", email, exc)
+
     async def _sync_identity_metadata(self, account: Account, payload: UsagePayload) -> bool:
         next_plan_type = coerce_account_plan_type(payload.plan_type, account.plan_type or "free")
         payload_workspace_id = _clean_optional(payload.workspace_id)

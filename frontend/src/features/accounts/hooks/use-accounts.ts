@@ -17,6 +17,9 @@ import {
   probeAccount,
   reactivateAccount,
   setAccountAlias,
+  switchToCodex,
+  getCodexActiveAccount,
+  autoReauthAccount,
   updateAccount,
   updateAccountLimitWarmup,
   updateAccountRoutingPolicy,
@@ -242,6 +245,32 @@ export function useAccountMutations() {
     },
   });
 
+  const switchToCodexMutation = useMutation({
+    mutationFn: (accountId: string) => switchToCodex(accountId),
+    onSuccess: (data) => {
+      toast.success(data.message || `Đã đăng nhập Codex với tài khoản ${data.email}!`);
+      void queryClient.invalidateQueries({ queryKey: ["accounts", "codex-active"] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Không thể đăng nhập tài khoản vào Codex");
+    },
+  });
+
+  const autoReauthMutation = useMutation({
+    mutationFn: (accountId: string) => autoReauthAccount(accountId),
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.message);
+      }
+      void invalidateAccountRelatedQueries(queryClient);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Lỗi tự động đăng nhập lại");
+    },
+  });
+
   return {
     importMutation,
     pauseMutation,
@@ -255,8 +284,20 @@ export function useAccountMutations() {
     routingPolicyMutation,
     updateMutation,
     resetCreditConsumeMutation,
+    switchToCodexMutation,
+    autoReauthMutation,
   };
 }
+
+export function useCodexActiveAccount() {
+  return useQuery({
+    queryKey: ["accounts", "codex-active"],
+    queryFn: getCodexActiveAccount,
+    staleTime: 5000,
+    refetchInterval: 10000,
+  });
+}
+
 
 export function useRateLimitResetCredits(
   accountId: string | null,

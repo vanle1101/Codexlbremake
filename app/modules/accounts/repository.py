@@ -1392,43 +1392,39 @@ class AccountsRepository:
         return matches[0]
 
     async def _account_by_slot_identity(self, account: Account) -> Account | None:
-        workspace_slot = _workspace_slot_identity(account)
-        if account.chatgpt_account_id and account.email and workspace_slot:
-            column, value = workspace_slot
-            result = await self._session.execute(
-                select(Account)
-                .where(Account.chatgpt_account_id == account.chatgpt_account_id)
-                .where(Account.email == account.email)
-                .where(column == value)
-                .order_by(Account.created_at.asc(), Account.id.asc())
-                .limit(1)
-            )
+        # 1. Match by email (case-insensitive) and workspace slot
+        if account.email and account.email != "unknown@example.com":
+            stmt = select(Account).where(func.lower(Account.email) == account.email.lower())
+            if account.workspace_id:
+                stmt = stmt.where(Account.workspace_id == account.workspace_id)
+            elif account.workspace_label:
+                stmt = stmt.where(Account.workspace_label == account.workspace_label)
+            else:
+                stmt = stmt.where(Account.workspace_id.is_(None))
+            result = await self._session.execute(stmt.order_by(Account.created_at.asc()).limit(1))
             if matched := result.scalar_one_or_none():
                 return matched
-        if account.chatgpt_account_id and account.email and account.workspace_id and account.workspace_label:
-            result = await self._session.execute(
-                select(Account)
-                .where(Account.chatgpt_account_id == account.chatgpt_account_id)
-                .where(Account.email == account.email)
-                .where(Account.workspace_id.is_(None))
-                .where(Account.workspace_label == account.workspace_label)
-                .order_by(Account.created_at.asc(), Account.id.asc())
-                .limit(1)
-            )
+
+        # 2. Match by chatgpt_account_id
+        if account.chatgpt_account_id:
+            stmt = select(Account).where(Account.chatgpt_account_id == account.chatgpt_account_id)
+            if account.workspace_id:
+                stmt = stmt.where(Account.workspace_id == account.workspace_id)
+            elif account.workspace_label:
+                stmt = stmt.where(Account.workspace_label == account.workspace_label)
+            else:
+                stmt = stmt.where(Account.workspace_id.is_(None))
+            result = await self._session.execute(stmt.order_by(Account.created_at.asc()).limit(1))
             if matched := result.scalar_one_or_none():
                 return matched
-        if workspace_slot and account.email:
-            column, value = workspace_slot
-            result = await self._session.execute(
-                select(Account)
-                .where(Account.email == account.email)
-                .where(column == value)
-                .order_by(Account.created_at.asc(), Account.id.asc())
-                .limit(1)
-            )
-            matched = result.scalar_one_or_none()
-            if matched is not None and _can_reuse_email_fallback(matched, account):
+
+        # 3. Match by account ID directly
+        if account.id:
+            stmt = select(Account).where(Account.id == account.id).limit(1)
+            result = await self._session.execute(stmt)
+            if matched := result.scalar_one_or_none():
                 return matched
+
         return None
 
     async def _lock_postgresql_account_identity_membership(
@@ -1639,6 +1635,8 @@ def _can_reuse_email_fallback(existing: Account, incoming: Account) -> bool:
     incoming_workspace_key = _workspace_slot_key(incoming)
     if existing_workspace_key and incoming_workspace_key and existing_workspace_key != incoming_workspace_key:
         return False
+    if existing.email and incoming.email and existing.email.lower() == incoming.email.lower():
+        return True
     return (
         not incoming.chatgpt_account_id
         or not existing.chatgpt_account_id

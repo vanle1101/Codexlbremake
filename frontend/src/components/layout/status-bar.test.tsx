@@ -226,8 +226,8 @@ describe("StatusBar", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("localizes combined routing labels in zh-CN", async () => {
-    await i18n.changeLanguage("zh-CN");
+  it("localizes combined routing labels in vi", async () => {
+    await i18n.changeLanguage("vi");
     try {
       mockSettings({
         routingStrategy: "capacity_weighted",
@@ -238,9 +238,9 @@ describe("StatusBar", () => {
 
       renderStatusBar();
 
-      expect(await screen.findByText(/按容量加权/)).toBeInTheDocument();
-      expect(screen.getByText(/粘性/)).toBeInTheDocument();
-      expect(screen.getByText(/较早周重置/)).toBeInTheDocument();
+      expect(await screen.findByText(/Theo trọng số dung lượng/)).toBeInTheDocument();
+      expect(screen.getByText(/Cố định/)).toBeInTheDocument();
+      expect(screen.getByText(/Đặt lại tuần sớm/)).toBeInTheDocument();
       expect(screen.queryByText(/Capacity weighted/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Sticky threads/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Early weekly reset/)).not.toBeInTheDocument();

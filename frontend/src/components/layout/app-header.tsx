@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Eye, EyeOff, LogIn, LogOut, Menu } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, LogIn, LogOut, Menu, Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, useLocation } from "react-router-dom";
@@ -17,12 +17,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { listAccounts } from "@/features/accounts/api";
 import { getSettings } from "@/features/settings/api";
 import { usePrivacyStore } from "@/hooks/use-privacy";
+import { useThemeStore } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
 const CORE_NAV_ITEMS = [
   { to: "/dashboard", labelKey: "nav.dashboard" },
   { to: "/reports", labelKey: "nav.reports" },
   { to: "/accounts", labelKey: "nav.accounts" },
+  { to: "/accounts-details", labelKey: "nav.accountsDetails" },
   { to: "/apis", labelKey: "nav.apis" },
   { to: "/settings", labelKey: "nav.settings" },
 ] as const;
@@ -55,6 +57,8 @@ export function AppHeader({
   const blurred = usePrivacyStore((s) => s.blurred);
   const togglePrivacy = usePrivacyStore((s) => s.toggle);
   const PrivacyIcon = blurred ? EyeOff : Eye;
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
   const { data: accounts = [] } = useQuery({
     queryKey: ["accounts", "list"],
     queryFn: listAccounts,
@@ -155,12 +159,32 @@ export function AppHeader({
         {/* Actions */}
         <div className="flex flex-1 items-center justify-end gap-1.5">
           <LanguageToggle />
+
+          {/* Theme Mode Toggle (Light / Dark) */}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            aria-label={theme === "dark" ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
+            title={theme === "dark" ? "Giao diện: Tối (Bấm để chuyển sang Sáng)" : "Giao diện: Sáng (Bấm để chuyển sang Tối)"}
+            className="press-scale hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground sm:inline-flex"
+          >
+            {theme === "dark" ? (
+              <Sun className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+            ) : (
+              <Moon className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+            )}
+          </Button>
+
+          {/* Privacy Mode Toggle (Blur / Show Emails) */}
           <Button
             type="button"
             size="sm"
             variant="ghost"
             onClick={togglePrivacy}
             aria-label={privacyLabel}
+            title={blurred ? "Chế độ riêng tư: Đang ẨN email (Bấm để Hiện)" : "Chế độ riêng tư: Đang HIỆN email (Bấm để Ẩn)"}
             className="press-scale hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground sm:inline-flex"
           >
             <PrivacyIcon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -249,6 +273,23 @@ export function AppHeader({
                   </NavLink>
                 ))}
                 <div className="my-2 h-px bg-border" />
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                >
+                  {theme === "dark" ? (
+                    <>
+                      <Sun className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+                      Chế độ sáng (Light Mode)
+                    </>
+                  ) : (
+                    <>
+                      <Moon className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+                      Chế độ tối (Dark Mode)
+                    </>
+                  )}
+                </button>
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

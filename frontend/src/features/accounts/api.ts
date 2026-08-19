@@ -18,6 +18,9 @@ import {
   AccountTrendsResponseSchema,
   AccountProbeRequestSchema,
   AccountProbeResponseSchema,
+  AccountAutoReauthResponseSchema,
+  AutoLoginStartRequestSchema,
+  AutoLoginStateResponseSchema,
   ConsumeRateLimitResetCreditResponseSchema,
   ManualOauthCallbackRequestSchema,
   ManualOauthCallbackResponseSchema,
@@ -28,6 +31,8 @@ import {
   OauthStatusResponseSchema,
   RateLimitResetCreditsSnapshotSchema,
   RuntimeConnectAddressResponseSchema,
+  SwitchToCodexResponseSchema,
+  CodexActiveAccountResponseSchema,
 } from "@/features/accounts/schemas";
 import type {
   AccountRoutingPolicy,
@@ -199,4 +204,70 @@ export function submitManualOauthCallback(payload: unknown) {
 
 export function getRuntimeConnectAddress() {
   return get("/api/settings/runtime/connect-address", RuntimeConnectAddressResponseSchema);
+}
+
+export function startAutoLogin(payload: unknown) {
+  const validated = AutoLoginStartRequestSchema.parse(payload);
+  return post(`${ACCOUNTS_BASE_PATH}/auto-login/start`, AutoLoginStateResponseSchema, {
+    body: validated,
+  });
+}
+
+export function getAutoLoginStatus() {
+  return get(`${ACCOUNTS_BASE_PATH}/auto-login/status`, AutoLoginStateResponseSchema);
+}
+
+export function pauseAutoLogin() {
+  return post(`${ACCOUNTS_BASE_PATH}/auto-login/pause`, AutoLoginStateResponseSchema);
+}
+
+export function resumeAutoLogin() {
+  return post(`${ACCOUNTS_BASE_PATH}/auto-login/resume`, AutoLoginStateResponseSchema);
+}
+
+export function cancelAutoLogin() {
+  return post(`${ACCOUNTS_BASE_PATH}/auto-login/cancel`, AutoLoginStateResponseSchema);
+}
+
+export function appendAutoLogin(payload: unknown) {
+  const validated = AutoLoginStartRequestSchema.parse(payload);
+  return post(`${ACCOUNTS_BASE_PATH}/auto-login/append`, AutoLoginStateResponseSchema, {
+    body: validated,
+  });
+}
+
+export function switchToCodex(accountId: string) {
+  return post(
+    `${ACCOUNTS_BASE_PATH}/${encodeURIComponent(accountId)}/switch-to-codex`,
+    SwitchToCodexResponseSchema,
+  );
+}
+
+export function getCodexActiveAccount() {
+  return get(`${ACCOUNTS_BASE_PATH}/codex-active`, CodexActiveAccountResponseSchema);
+}
+
+export function launchCodexCli() {
+  return post(`${ACCOUNTS_BASE_PATH}/launch-codex-cli`, null);
+}
+
+export function autoReauthAccount(accountId: string) {
+  return post(
+    `${ACCOUNTS_BASE_PATH}/${encodeURIComponent(accountId)}/auto-reauth`,
+    AccountAutoReauthResponseSchema,
+  );
+}
+
+export function saveAccountCredentials(accountId: string, payload: { email: string; password: string; two_factor_secret?: string | null }) {
+  return post(
+    `${ACCOUNTS_BASE_PATH}/${encodeURIComponent(accountId)}/save-credentials`,
+    null,
+    { body: payload },
+  );
+}
+
+export function hasAccountCredentials(accountId: string) {
+  return get<{ has_credentials?: boolean }>(
+    `${ACCOUNTS_BASE_PATH}/${encodeURIComponent(accountId)}/has-credentials`,
+  );
 }
