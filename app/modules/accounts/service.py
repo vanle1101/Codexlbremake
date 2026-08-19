@@ -650,11 +650,42 @@ class AccountsService:
 
         if isinstance(bulk_data, list) or (isinstance(bulk_data, dict) and "accounts" in bulk_data and isinstance(bulk_data["accounts"], list)):
             items = bulk_data if isinstance(bulk_data, list) else bulk_data["accounts"]
-            saved_list = []
+            
+            # 1. Deduplication within the imported JSON payload
+            unique_items: list[dict] = []
+            seen_keys: set[str] = set()
+            duplicates_count = 0
+
             for item in items:
+                if not isinstance(item, dict):
+                    continue
+                # Identify item by email (case-insensitive) + workspace_id
+                email_hint = (item.get("email") or "").strip().lower()
+                ws_hint = str(item.get("workspace_id") or "")
+                acc_hint = str(item.get("chatgpt_account_id") or item.get("account_id") or item.get("id") or "")
+                
+                if email_hint:
+                    dedupe_key = f"{email_hint}::{ws_hint}"
+                elif acc_hint:
+                    dedupe_key = f"acc::{acc_hint}::{ws_hint}"
+                else:
+                    dedupe_key = f"tok::{hash(str(item.get('access_token') or item.get('tokens')))}"
+
+                if dedupe_key in seen_keys:
+                    duplicates_count += 1
+                    continue
+                seen_keys.add(dedupe_key)
+                unique_items.append(item)
+
+            if duplicates_count > 0:
+                logger.info(f"🔍 [Import JSON] Đã lọc bỏ {duplicates_count} tài khoản trùng lặp trong file JSON nạp vào.")
+
+            from app.modules.accounts.auto_login import get_auto_login_service
+            auto_login_service = get_auto_login_service()
+            saved_list = []
+
+            for item in unique_items:
                 try:
-                    if not isinstance(item, dict):
-                        continue
                     tokens = item.get("tokens") or {}
                     acc_token = tokens.get("access_token") or item.get("access_token")
                     ref_token = tokens.get("refresh_token") or item.get("refresh_token")
@@ -689,6 +720,12 @@ class AccountsService:
                     plan_type = item.get("plan_type") or (coerce_account_plan_type(claims.plan_type, DEFAULT_PLAN) if claims else DEFAULT_PLAN)
                     account_id = item.get("id") or generate_unique_account_id(raw_account_id, email, workspace_id, workspace_label)
 
+                    # Auto-save credentials to Vault if present in JSON
+                    pwd = item.get("password") or item.get("pass")
+                    two_fa = item.get("two_factor_secret") or item.get("2fa") or item.get("two_factor")
+                    if email and pwd:
+                        auto_login_service.save_credential(email=email, password=pwd, two_factor_secret=two_fa)
+
                     account = Account(
                         id=account_id,
                         chatgpt_account_id=raw_account_id,
@@ -717,9 +754,12 @@ class AccountsService:
 
             get_account_selection_cache().invalidate()
             if saved_list:
+                status_msg = f"{len(saved_list)} accounts"
+                if duplicates_count > 0:
+                    status_msg += f" (đã lọc {duplicates_count} trùng)"
                 return AccountImportResponse(
                     account_id=f"bulk_{len(saved_list)}",
-                    email=f"{len(saved_list)} accounts",
+                    email=status_msg,
                     workspace_id=None,
                     workspace_label=None,
                     seat_type=None,
