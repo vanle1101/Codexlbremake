@@ -157,13 +157,25 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1), color 200ms cubic-bezier(0.4, 0, 0.2, 1);
   }
   button, a, [role="button"], input, select, textarea {
     touch-action: manipulation;
+  }
+  /* Exemptions to avoid interfering with spinner or dialog animations */
+  .animate-spin,
+  .animate-pulse,
+  .no-transition,
+  [data-radix-popper-content-wrapper],
+  svg.animate-spin {
+    transition: none !important;
   }
 }
 
