@@ -381,3 +381,15 @@ class AccountAutoReauthResponse(DashboardModel):
     status: str
     message: str
     needs_credentials: bool = False
+
+
+class DeleteAllAccountsRequest(DashboardModel):
+    delete_history: bool = False
+    clear_vault: bool = False
+    account_ids: list[str] | None = None
+
+
+class DeleteAllAccountsResponse(DashboardModel):
+    deleted_count: int
+    status: str = "deleted"
+

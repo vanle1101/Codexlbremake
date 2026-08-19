@@ -87,6 +87,7 @@ export function AccountsGridPage() {
     setAliasMutation,
     probeMutation,
     deleteMutation,
+    deleteAllMutation,
     routingPolicyMutation,
     exportAuthMutation,
     switchToCodexMutation,
@@ -114,7 +115,10 @@ export function AccountsGridPage() {
   const reauthDialog = useDialogState<AccountSummary>();
   const deleteDialog = useDialogState<string>();
   const bulkDeleteDialog = useDialogState();
+  const deleteAllDialog = useDialogState();
   const exportDialog = useDialogState<AccountAuthExportResponse>();
+  const [deleteHistoryOption, setDeleteHistoryOption] = useState(false);
+  const [clearVaultOption, setClearVaultOption] = useState(true);
 
   type ResetCreditTarget = { accountId: string; availableResetCredits: number };
   const resetCreditDialog = useDialogState<ResetCreditTarget>();
@@ -256,6 +260,19 @@ export function AccountsGridPage() {
     await Promise.all(ids.map((id) => deleteMutation.mutateAsync({ accountId: id }).catch(() => null)));
     setSelectedIds(new Set());
     toast.success(t("accounts.grid.bulk.deleted", { count: ids.length }));
+  };
+
+  const handleDeleteAllConfirm = async () => {
+    deleteAllDialog.hide();
+    try {
+      await deleteAllMutation.mutateAsync({
+        deleteHistory: deleteHistoryOption,
+        clearVault: clearVaultOption,
+      });
+      setSelectedIds(new Set());
+    } catch {
+      // Handled by hook toast
+    }
   };
 
   // Single card actions
@@ -421,6 +438,19 @@ export function AccountsGridPage() {
             <Download className="mr-2 h-4 w-4" />
             {t("accounts.grid.exportAllJson")}
           </Button>
+
+          {totalCount > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 font-semibold"
+              onClick={() => deleteAllDialog.show()}
+              title="Xoá tất cả tài khoản"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Xoá tất cả ({totalCount})
+            </Button>
+          )}
 
           <Button
             type="button"
@@ -805,6 +835,61 @@ export function AccountsGridPage() {
         loading={deleteMutation.isPending}
         onConfirm={handleBulkDeleteConfirm}
       />
+
+      {/* Delete All Accounts Dialog */}
+      <Dialog open={deleteAllDialog.open} onOpenChange={deleteAllDialog.onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertTriangle className="h-5 w-5" />
+              <DialogTitle>Xoá tất cả tài khoản</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs pt-1">
+              Bạn có chắc chắn muốn xoá toàn bộ <strong>{totalCount}</strong> tài khoản đã lưu trong Codex-LB? Hành động này sẽ xoá tất cả token đã lưu và không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2.5 py-2">
+            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+              <input
+                type="checkbox"
+                checked={clearVaultOption}
+                onChange={(e) => setClearVaultOption(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <span>Xoá toàn bộ mật khẩu trong Vault đăng nhập tự động</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteHistoryOption}
+                onChange={(e) => setDeleteHistoryOption(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <span>Xoá toàn bộ lịch sử sử dụng (Usage & audit logs)</span>
+            </label>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => deleteAllDialog.hide()}>
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteAllConfirm}
+              disabled={deleteAllMutation.isPending}
+            >
+              {deleteAllMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Xác nhận xoá {totalCount} tài khoản
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Alias / Tag Dialog */}
       <Dialog open={!!aliasTarget} onOpenChange={(open) => !open && setAliasTarget(null)}>

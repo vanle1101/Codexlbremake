@@ -26,6 +26,50 @@ def normalize_email_key(email: str) -> str:
     return email.strip().lower()
 
 
+async def _solve_turnstile(page: Any) -> bool:
+    try:
+        cf_selectors = [
+            '#challenge-stage input[type="checkbox"]',
+            'span.ctp-label',
+            'div[role="checkbox"]',
+            '.cb-lb',
+            '#turnstile-wrapper input[type="checkbox"]',
+            '[data-testid="turnstile-checkbox"]',
+            'div.cf-turnstile',
+        ]
+        for sel in cf_selectors:
+            loc = page.locator(sel).first
+            if await loc.count() > 0 and await loc.is_visible():
+                await loc.click(timeout=2000)
+                await asyncio.sleep(0.5)
+                return True
+
+        frames = page.frames if hasattr(page, "frames") and isinstance(page.frames, (list, tuple)) else []
+        for frame in frames:
+            frame_url = getattr(frame, "url", "")
+            if isinstance(frame_url, str) and any(k in frame_url.lower() for k in ["cloudflare", "turnstile", "challenges"]):
+                for iframe_sel in [
+                    'input[type="checkbox"]',
+                    'div[role="checkbox"]',
+                    'span.ctp-label',
+                    '.ctp-checkbox-label',
+                    'span.mark',
+                    '#challenge-stage',
+                    'body',
+                ]:
+                    try:
+                        box = frame.locator(iframe_sel).first
+                        if await box.count() > 0 and await box.is_visible():
+                            await box.click(timeout=2000)
+                            await asyncio.sleep(0.5)
+                            return True
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return False
+
+
 class AutoLoginService:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -96,6 +140,10 @@ class AutoLoginService:
             two_factor_secret=two_factor_secret.strip() if two_factor_secret else None,
             status="PENDING",
         )
+        self._save_vault()
+
+    def clear_vault(self) -> None:
+        self._vault = {}
         self._save_vault()
 
     def _log(self, message: str, level: str = "info") -> None:
@@ -261,37 +309,131 @@ class AutoLoginService:
                 viewport={"width": 1280, "height": 800},
                 locale="en-US",
             )
+            if hasattr(context, "add_init_script"):
+                try:
+                    res = context.add_init_script("""
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        });
+                        Object.defineProperty(navigator, 'languages', {
+                            get: () => ['en-US', 'en']
+                        });
+                        Object.defineProperty(navigator, 'plugins', {
+                            get: () => [1, 2, 3, 4, 5]
+                        });
+                    """)
+                    if asyncio.iscoroutine(res):
+                        await res
+                except Exception:
+                    pass
             page = await context.new_page()
 
+            target_url = auth_resp.authorization_url or "https://chatgpt.com/auth/login"
             self._log(f"[Luồng {worker_id}] Đang mở Web Auth ChatGPT ({acc.email})...")
-            await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=35000)
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=35000)
             await asyncio.sleep(1.5)
 
             # Step A: Email
             self._log(f"[Luồng {worker_id}] Đang điền email {acc.email}...")
             email_input = page.locator(
-                'input[name="username"], input#username, input[type="email"], input[name="email"]'
+                'input[name="email"], input[name="username"], input#email-input, input[type="email"], input#email, input#username'
             ).first
-            await email_input.wait_for(state="visible", timeout=20000)
+
+            try:
+                await email_input.wait_for(state="visible", timeout=8000)
+            except Exception:
+                # If on landing page with login button
+                login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in"), [data-testid="login-button"]').first
+                try:
+                    if await login_btn.is_visible():
+                        await login_btn.click(timeout=2000)
+                        await asyncio.sleep(1)
+                except Exception:
+                    pass
+                await _solve_turnstile(page)
+                await email_input.wait_for(state="visible", timeout=12000)
+
             await email_input.fill(acc.email)
             await asyncio.sleep(0.3)
+            try:
+                await email_input.press("Enter")
+            except Exception:
+                pass
 
-            continue_btn = page.locator('button[type="submit"]').first
-            await continue_btn.click()
-            await asyncio.sleep(2)
-
-            # Step B: Password
-            self._log(f"[Luồng {worker_id}] Đang điền mật khẩu cho {acc.email}...")
-            pass_input = page.locator(
-                'input[name="password"], input#password, input[type="password"]'
+            continue_btn = page.locator(
+                'button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục"), button[name="action"][value="default"]'
             ).first
-            await pass_input.wait_for(state="visible", timeout=20000)
+            try:
+                if await continue_btn.is_visible():
+                    await continue_btn.click(timeout=2000)
+            except Exception:
+                pass
+
+            # Step B: Password (with active Turnstile polling & dynamic wait)
+            self._log(f"[Luồng {worker_id}] Đang chờ và điền mật khẩu cho {acc.email}...")
+            pass_input = page.locator(
+                'input[name="password"], input#password, input[type="password"], input[autocomplete="current-password"]'
+            ).first
+
+            password_found = False
+            for pass_wait_idx in range(40):
+                if self._should_stop:
+                    break
+
+                try:
+                    if await pass_input.is_visible():
+                        password_found = True
+                        break
+                except Exception:
+                    pass
+
+                await _solve_turnstile(page)
+
+                try:
+                    err_el = page.locator(
+                        '.error-message, [data-error-code], #error-element-password, [role="alert"], span.error'
+                    ).first
+                    if await err_el.is_visible():
+                        err_text = (await err_el.inner_text()).strip()
+                        if err_text and any(k in err_text.lower() for k in ["wrong", "invalid", "not exist", "rate limit", "too many", "blocked"]):
+                            raise ValueError(f"Lỗi tài khoản: {err_text}")
+                except ValueError:
+                    raise
+                except Exception:
+                    pass
+
+                if pass_wait_idx in (4, 10, 18):
+                    try:
+                        await email_input.press("Enter")
+                        if await continue_btn.is_visible():
+                            await continue_btn.click(timeout=1500)
+                    except Exception:
+                        pass
+
+                await asyncio.sleep(0.5)
+
+            if not password_found:
+                try:
+                    await pass_input.wait_for(state="visible", timeout=2000)
+                except Exception:
+                    raise ValueError("Không tìm thấy ô nhập mật khẩu sau 20 giây (có thể do Cloudflare chặn hoặc IP bị rate limit)")
+
             await pass_input.fill(acc.password)
             await asyncio.sleep(0.3)
+            try:
+                await pass_input.press("Enter")
+            except Exception:
+                pass
 
-            submit_btn = page.locator('button[type="submit"]').first
-            await submit_btn.click()
-            await asyncio.sleep(2)
+            submit_btn = page.locator(
+                'button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục"), button[name="action"][value="default"], button:has-text("Log in"), button:has-text("Sign in")'
+            ).first
+            try:
+                if await submit_btn.is_visible():
+                    await submit_btn.click(timeout=2000)
+            except Exception:
+                pass
+            await asyncio.sleep(1.5)
 
             # Step C: Loop wait for 2FA / Turnstile / Workspace / Callback
             success = False
@@ -405,12 +547,7 @@ class AutoLoginService:
 
                 # Check Cloudflare Turnstile
                 try:
-                    cf_box = page.locator(
-                        '#challenge-stage input[type="checkbox"], span.ctp-label, div[role="checkbox"], .cb-lb'
-                    ).first
-                    if await cf_box.is_visible():
-                        self._log(f"[Luồng {worker_id}] Phát hiện Cloudflare, đang click xác nhận...")
-                        await cf_box.click()
+                    await _solve_turnstile(page)
                 except Exception:
                     pass
 

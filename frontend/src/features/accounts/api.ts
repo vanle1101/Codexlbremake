@@ -33,6 +33,8 @@ import {
   RuntimeConnectAddressResponseSchema,
   SwitchToCodexResponseSchema,
   CodexActiveAccountResponseSchema,
+  DeleteAllAccountsRequestSchema,
+  DeleteAllAccountsResponseSchema,
 } from "@/features/accounts/schemas";
 import type {
   AccountRoutingPolicy,
@@ -173,6 +175,19 @@ export function deleteAccount(accountId: string, deleteHistory = false) {
   return del(
     `${ACCOUNTS_BASE_PATH}/${encodeURIComponent(accountId)}${qs}`,
     AccountActionResponseSchema,
+  );
+}
+
+export function deleteAllAccounts(deleteHistory = false, clearVault = false, accountIds?: string[]) {
+  const payload = DeleteAllAccountsRequestSchema.parse({
+    delete_history: deleteHistory,
+    clear_vault: clearVault,
+    account_ids: accountIds,
+  });
+  return post(
+    `${ACCOUNTS_BASE_PATH}/delete-all`,
+    DeleteAllAccountsResponseSchema,
+    { body: payload },
   );
 }
 

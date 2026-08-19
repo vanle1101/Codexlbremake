@@ -952,6 +952,24 @@ class AccountsService:
             request_account_deletion_run()
         return result
 
+    async def delete_all_accounts(
+        self,
+        *,
+        delete_history: bool = False,
+        account_ids: list[str] | None = None,
+    ) -> int:
+        accounts = (
+            await self._repo.list_accounts_by_ids(account_ids)
+            if account_ids is not None
+            else await self._repo.list_accounts()
+        )
+        count = 0
+        for acc in accounts:
+            ok = await self.delete_account(acc.id, delete_history=delete_history)
+            if ok:
+                count += 1
+        return count
+
     async def set_account_alias(self, account_id: str, alias: str | None) -> bool:
         normalized = alias.strip() if isinstance(alias, str) else None
         if normalized == "":

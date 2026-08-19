@@ -450,3 +450,16 @@ export const AccountAutoReauthResponseSchema = z.object({
   needsCredentials: z.boolean().optional(),
 });
 export type AccountAutoReauthResponse = z.infer<typeof AccountAutoReauthResponseSchema>;
+
+export const DeleteAllAccountsRequestSchema = z.object({
+  delete_history: z.boolean().default(false).optional(),
+  clear_vault: z.boolean().default(false).optional(),
+  account_ids: z.array(z.string()).nullable().optional(),
+});
+
+export const DeleteAllAccountsResponseSchema = z.object({
+  deleted_count: z.number().int(),
+  status: z.string(),
+});
+export type DeleteAllAccountsResponse = z.infer<typeof DeleteAllAccountsResponseSchema>;
+

@@ -33,6 +33,116 @@ export type AutoLoginDialogProps = {
   onAccountAdded?: () => void;
 };
 
+export function parseAccountLine(rawLine: string): AutoLoginAccountItem | null {
+  let line = rawLine.trim();
+  if (!line || line.startsWith("#") || line.startsWith("//")) return null;
+
+  // 1. Remove leading line numbering / bullets: "1. ", "1/ ", "[1] ", "1) ", "1- ", "- ", "• ", "* "
+  line = line.replace(/^\s*(?:\[\d+\]|\d+[.)\-\/:•*]|\s*[-*•])\s*/, "");
+
+  // 2. Find the email using regex
+  const emailMatch = line.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z0-9]+)/i);
+  if (!emailMatch || emailMatch.index === undefined) return null;
+
+  const email = emailMatch[1].trim();
+  const afterEmail = line.slice(emailMatch.index + emailMatch[1].length).trim();
+  if (!afterEmail) return null;
+
+  // Strip leading separator after email
+  let remainder = afterEmail.replace(/^[\s|:;,\t\/\-]+/, "").trim();
+  if (!remainder) return null;
+
+  let password = "";
+  let twoFactorSecret: string | null = null;
+
+  // Extract otpauth URL if present in remainder
+  const otpMatch = remainder.match(/otpauth:\/\/[^\s]+/i);
+  if (otpMatch) {
+    try {
+      const url = new URL(otpMatch[0]);
+      const sec = url.searchParams.get("secret");
+      if (sec) twoFactorSecret = sec;
+    } catch {}
+    remainder = remainder.replace(otpMatch[0], "").trim();
+  }
+
+  // Determine delimiter
+  let parts: string[] = [];
+  if (afterEmail.startsWith("|") || remainder.includes("|")) {
+    parts = remainder.split("|").map((p) => p.trim()).filter(Boolean);
+  } else if (afterEmail.startsWith("\t") || remainder.includes("\t")) {
+    parts = remainder.split("\t").map((p) => p.trim()).filter(Boolean);
+  } else if (afterEmail.startsWith(";") || remainder.includes(";")) {
+    parts = remainder.split(";").map((p) => p.trim()).filter(Boolean);
+  } else if (afterEmail.startsWith(",") || remainder.includes(",")) {
+    parts = remainder.split(",").map((p) => p.trim()).filter(Boolean);
+  } else if (afterEmail.startsWith("---") || remainder.includes("---")) {
+    parts = remainder.split("---").map((p) => p.trim()).filter(Boolean);
+  } else if (afterEmail.startsWith(" - ") || remainder.includes(" - ")) {
+    parts = remainder.split(" - ").map((p) => p.trim()).filter(Boolean);
+  } else if (afterEmail.startsWith(":") || remainder.includes(":")) {
+    parts = remainder.split(":").map((p) => p.trim()).filter(Boolean);
+  } else if (/\s+/.test(remainder)) {
+    parts = remainder.split(/\s+/).map((p) => p.trim()).filter(Boolean);
+  } else {
+    parts = [remainder];
+  }
+
+  if (parts.length > 0) {
+    if (afterEmail.startsWith(":") || (remainder.includes(":") && !remainder.includes("|") && !remainder.includes("\t") && !remainder.includes(";"))) {
+      if (parts.length === 1) {
+        password = parts[0];
+      } else if (parts.length === 2) {
+        const p2 = parts[1];
+        if (/^[A-Za-z2-7=]{16,64}$/.test(p2.replace(/\s+/g, ""))) {
+          password = parts[0];
+          if (!twoFactorSecret) twoFactorSecret = p2.replace(/\s+/g, "");
+        } else if (/^[A-Za-z0-9]{6,64}$/.test(p2) && !p2.includes(" ")) {
+          password = parts[0];
+          if (!twoFactorSecret) twoFactorSecret = p2;
+        } else {
+          password = parts.join(":");
+        }
+      } else {
+        const last = parts[parts.length - 1];
+        if (/^[A-Za-z2-7=]{16,64}$/.test(last.replace(/\s+/g, ""))) {
+          if (!twoFactorSecret) twoFactorSecret = last.replace(/\s+/g, "");
+          password = parts.slice(0, -1).join(":");
+        } else {
+          password = parts.join(":");
+        }
+      }
+    } else {
+      password = parts[0];
+      if (parts.length > 1 && !twoFactorSecret) {
+        const p2 = parts[1];
+        twoFactorSecret = p2.replace(/\s+/g, "");
+      }
+    }
+  }
+
+  if (password) {
+    password = password.replace(/\s+(?:#|\/\/).*$/, "").trim();
+  }
+
+  if (twoFactorSecret) {
+    twoFactorSecret = twoFactorSecret.replace(/\s+(?:#|\/\/).*$/, "").replace(/\s+/g, "");
+    if (twoFactorSecret.includes("|")) twoFactorSecret = twoFactorSecret.split("|")[0];
+    if (twoFactorSecret.includes(";")) twoFactorSecret = twoFactorSecret.split(";")[0];
+    if (twoFactorSecret.length < 6) twoFactorSecret = null;
+  }
+
+  if (!email || !password) return null;
+
+  return {
+    email,
+    password,
+    two_factor_secret: twoFactorSecret,
+    status: "PENDING",
+    error: null,
+  };
+}
+
 export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLoginDialogProps) {
   const { t } = useTranslation();
 
@@ -58,55 +168,21 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [sessionState.logs]);
 
-  // Parse accounts text into structured array with deduplication & Gmail dot normalization
+  // Parse accounts text into structured array with flexible multi-delimiter parser & deduplication
   const { parsedAccounts, rawTotalCount, duplicateCount } = useMemo(() => {
     if (!accountsText.trim()) {
       return { parsedAccounts: [], rawTotalCount: 0, duplicateCount: 0 };
     }
-    const lines = accountsText.split("\n");
+    const lines = accountsText.split(/\r?\n/);
     const accountsMap = new Map<string, AutoLoginAccountItem>();
     let validLines = 0;
 
     for (const rawLine of lines) {
-      let line = rawLine.trim();
-      if (!line || line.startsWith("#") || line.startsWith("//")) continue;
-
-      // Tự động loại bỏ phần ghi chú / mã lỗi ở đuôi dòng (vd: # Lỗi: ... hoặc // ...)
-      if (line.includes("#")) {
-        line = line.split("#")[0].trim();
-      }
-      if (line.includes("//")) {
-        line = line.split("//")[0].trim();
-      }
-      if (!line) continue;
-
-      let parts: string[] = [];
-      if (line.includes("|")) {
-        parts = line.split("|");
-      } else if (line.includes("\t")) {
-        parts = line.split("\t");
-      } else if (line.includes(":")) {
-        parts = line.split(":");
-      }
-
-      if (parts.length >= 2) {
-        const email = parts[0].trim();
-        const password = parts[1].trim();
-        const twoFactorSecret = parts[2] ? parts[2].trim().replace(/\s+/g, "") : null;
-
-        if (email.includes("@")) {
-          validLines += 1;
-          // Lọc trùng theo email, giữ nguyên 100% email gốc và mật khẩu gốc
-          const normKey = email.toLowerCase();
-
-          accountsMap.set(normKey, {
-            email,
-            password,
-            two_factor_secret: twoFactorSecret,
-            status: "PENDING",
-            error: null,
-          });
-        }
+      const item = parseAccountLine(rawLine);
+      if (item) {
+        validLines += 1;
+        const normKey = item.email.trim().toLowerCase();
+        accountsMap.set(normKey, item);
       }
     }
 
@@ -324,7 +400,10 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 </span>
               ) : null}
               <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
-                {parsedAccounts.length} tài khoản hợp lệ
+                {t("accounts.autoLoginDialog.parseCount", {
+                  count: parsedAccounts.length,
+                  defaultValue: `${parsedAccounts.length} tài khoản hợp lệ`,
+                })}
               </span>
             </div>
           </div>

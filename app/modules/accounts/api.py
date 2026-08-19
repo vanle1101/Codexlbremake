@@ -53,6 +53,8 @@ from app.modules.accounts.schemas import (
     AutoLoginStartRequest,
     AutoLoginStateResponse,
     CodexActiveAccountResponse,
+    DeleteAllAccountsRequest,
+    DeleteAllAccountsResponse,
     SwitchToCodexResponse,
 )
 from app.modules.accounts.service import (
@@ -622,6 +624,33 @@ async def delete_account(
         details={"account_id": account_id, "delete_history": delete_history},
     )
     return AccountDeleteResponse(status="deleted")
+
+
+@router.post("/delete-all", response_model=DeleteAllAccountsResponse)
+async def delete_all_accounts_endpoint(
+    request: Request,
+    payload: DeleteAllAccountsRequest | None = None,
+    _write_access=Depends(require_dashboard_write_access),
+    context: AccountsContext = Depends(get_accounts_context),
+) -> DeleteAllAccountsResponse:
+    delete_history = payload.delete_history if payload else False
+    clear_vault = payload.clear_vault if payload else False
+    account_ids = payload.account_ids if payload else None
+
+    count = await context.service.delete_all_accounts(
+        delete_history=delete_history,
+        account_ids=account_ids,
+    )
+    if clear_vault:
+        auto_login_service = get_auto_login_service()
+        auto_login_service.clear_vault()
+
+    AuditService.log_async(
+        "all_accounts_deleted",
+        actor_ip=request.client.host if request.client else None,
+        details={"deleted_count": count, "delete_history": delete_history, "clear_vault": clear_vault},
+    )
+    return DeleteAllAccountsResponse(deleted_count=count, status="deleted")
 
 
 @router.post("/{account_id}/auto-reauth", response_model=AccountAutoReauthResponse)

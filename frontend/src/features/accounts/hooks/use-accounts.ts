@@ -7,6 +7,7 @@ import {
   consumeRateLimitResetCredit,
   consumeAccountUsageResetCredit,
   deleteAccount,
+  deleteAllAccounts,
   exportAccountAuth,
   getAccountTrends,
   getAccountUsageResetCredits,
@@ -136,6 +137,25 @@ export function useAccountMutations() {
     },
     onError: (error: Error) => {
       toast.error(error.message || t("accounts.toasts.deleteFailed"));
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: ({
+      deleteHistory = false,
+      clearVault = false,
+      accountIds,
+    }: {
+      deleteHistory?: boolean;
+      clearVault?: boolean;
+      accountIds?: string[];
+    } = {}) => deleteAllAccounts(deleteHistory, clearVault, accountIds),
+    onSuccess: (data) => {
+      toast.success(`Đã xoá ${data.deleted_count} tài khoản thành công!`);
+      void invalidateAccountRelatedQueries(queryClient);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Lỗi khi xoá tất cả tài khoản");
     },
   });
 
@@ -277,6 +297,7 @@ export function useAccountMutations() {
     resumeMutation,
     setAliasMutation,
     deleteMutation,
+    deleteAllMutation,
     probeMutation,
     usageResetMutation,
     exportAuthMutation,
