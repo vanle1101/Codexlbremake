@@ -337,7 +337,7 @@ class AutoLoginAccountItem(DashboardModel):
 class AutoLoginStartRequest(DashboardModel):
     accounts: list[AutoLoginAccountItem]
     delay_seconds: int = Field(default=2, ge=0, le=60)
-    concurrency: int = Field(default=3, ge=1, le=10)
+    concurrency: int = Field(default=3, ge=1, le=50)
     headless: bool = True
 
 

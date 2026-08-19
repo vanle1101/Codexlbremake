@@ -520,8 +520,14 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 <option value={1}>1 luồng</option>
                 <option value={2}>2 luồng</option>
                 <option value={3}>3 luồng (⚡ Nhanh - Khuyên dùng)</option>
-                <option value={4}>4 luồng (🚀 Rất nhanh)</option>
-                <option value={5}>5 luồng (🚀 Siêu tốc)</option>
+                <option value={4}>4 luồng</option>
+                <option value={5}>5 luồng</option>
+                <option value={8}>8 luồng (⚡ Cực nhanh)</option>
+                <option value={10}>10 luồng (🚀 Siêu tốc)</option>
+                <option value={15}>15 luồng (🔥 Turbo)</option>
+                <option value={20}>20 luồng (⚡ MAX Speed)</option>
+                <option value={25}>25 luồng</option>
+                <option value={30}>30 luồng</option>
               </select>
             </div>
 

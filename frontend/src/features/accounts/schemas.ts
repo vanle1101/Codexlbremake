@@ -416,7 +416,7 @@ export const AutoLoginStartRequestSchema = z.object({
   accounts: z.array(AutoLoginAccountItemSchema),
   delay_seconds: z.number().int().min(0).max(60).default(2).optional(),
   delaySeconds: z.number().int().min(0).max(60).default(2).optional(),
-  concurrency: z.number().int().min(1).max(10).default(3).optional(),
+  concurrency: z.number().int().min(1).max(50).default(3).optional(),
   headless: z.boolean().default(true),
 });
 
