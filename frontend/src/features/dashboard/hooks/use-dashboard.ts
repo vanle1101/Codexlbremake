@@ -10,7 +10,7 @@ export function useDashboard(timeframe: OverviewTimeframe = DEFAULT_OVERVIEW_TIM
   return useQuery({
     queryKey: ["dashboard", "overview", timeframe],
     queryFn: () => getDashboardOverview({ timeframe }),
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
@@ -21,7 +21,7 @@ export function useDashboardProjections(enabled = true) {
     queryKey: ["dashboard", "projections"],
     queryFn: getDashboardProjections,
     enabled,
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

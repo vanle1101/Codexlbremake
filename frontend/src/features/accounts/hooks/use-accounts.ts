@@ -357,7 +357,7 @@ export function useAccounts() {
     queryKey: ["accounts", "list"],
     queryFn: listAccounts,
     select: (data) => data.accounts,
-    refetchInterval: 30_000,
+    refetchInterval: 3_000,
     refetchIntervalInBackground: false,
   });
   const accountsQuery = { data, error, isFetching, isLoading, isPending, isSuccess, refetch };

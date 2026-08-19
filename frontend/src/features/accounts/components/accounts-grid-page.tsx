@@ -773,6 +773,9 @@ export function AccountsGridPage() {
           <AutoLoginDialog
             open={autoLoginDialog.open}
             onOpenChange={autoLoginDialog.onOpenChange}
+            onAccountAdded={async () => {
+              await accountsQuery.refetch();
+            }}
           />
         </Suspense>
       ) : null}
