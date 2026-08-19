@@ -36,12 +36,25 @@ async def _solve_turnstile(page: Any) -> bool:
             '#turnstile-wrapper input[type="checkbox"]',
             '[data-testid="turnstile-checkbox"]',
             'div.cf-turnstile',
+            'iframe[src*="cloudflare"]',
+            'iframe[src*="turnstile"]',
+            'iframe[src*="challenges"]',
         ]
         for sel in cf_selectors:
             loc = page.locator(sel).first
             if await loc.count() > 0 and await loc.is_visible():
+                box = await loc.bounding_box()
+                if box and box.get("width", 0) > 0 and box.get("height", 0) > 0:
+                    try:
+                        await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                        await asyncio.sleep(0.08)
+                        await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                        await asyncio.sleep(0.4)
+                        return True
+                    except Exception:
+                        pass
                 await loc.click(timeout=2000)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.4)
                 return True
 
         frames = page.frames if hasattr(page, "frames") and isinstance(page.frames, (list, tuple)) else []
@@ -60,8 +73,16 @@ async def _solve_turnstile(page: Any) -> bool:
                     try:
                         box = frame.locator(iframe_sel).first
                         if await box.count() > 0 and await box.is_visible():
+                            bbox = await box.bounding_box()
+                            if bbox and bbox.get("width", 0) > 0:
+                                try:
+                                    await page.mouse.click(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
+                                    await asyncio.sleep(0.4)
+                                    return True
+                                except Exception:
+                                    pass
                             await box.click(timeout=2000)
-                            await asyncio.sleep(0.5)
+                            await asyncio.sleep(0.4)
                             return True
                     except Exception:
                         pass
@@ -416,7 +437,18 @@ class AutoLoginService:
                 try:
                     await pass_input.wait_for(state="visible", timeout=2000)
                 except Exception:
-                    raise ValueError("Không tìm thấy ô nhập mật khẩu sau 20 giây (có thể do Cloudflare chặn hoặc IP bị rate limit)")
+                    page_title = ""
+                    current_url = getattr(page, "url", "")
+                    try:
+                        page_title = await page.title()
+                    except Exception:
+                        pass
+                    diag = ""
+                    if "Just a moment" in page_title or "challenge" in current_url:
+                        diag = " (Kẹt tại xác thực Cloudflare Turnstile)"
+                    elif "auth.openai.com" in current_url:
+                        diag = " (OpenAI chưa hiển thị form mật khẩu)"
+                    raise ValueError(f"Không tìm thấy ô nhập mật khẩu sau 20 giây{diag}. Gợi ý: Giảm số luồng xuống 2-3 luồng hoặc tắt 'Chạy ngầm (Headless)'.")
 
             await pass_input.fill(acc.password)
             await asyncio.sleep(0.3)
@@ -666,6 +698,10 @@ class AutoLoginService:
             concurrency = min(self._concurrency, max(1, work_queue.qsize()))
 
             async def worker(worker_id: int) -> None:
+                # Stagger initial worker launch by 2.0s per thread so they don't hit OpenAI Auth simultaneously
+                if worker_id > 1:
+                    await asyncio.sleep((worker_id - 1) * 2.0)
+
                 while not work_queue.empty():
                     if self._should_stop:
                         break
