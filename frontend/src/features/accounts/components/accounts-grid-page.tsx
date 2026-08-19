@@ -400,6 +400,20 @@ export function AccountsGridPage() {
 
           <Button
             type="button"
+            variant="outline"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold"
+            onClick={() => {
+              window.open("/api/accounts/export-all-json", "_blank");
+              toast.success(t("accounts.grid.exportAllSuccess"));
+            }}
+            title={t("accounts.grid.exportAllJson")}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t("accounts.grid.exportAllJson")}
+          </Button>
+
+          <Button
+            type="button"
             className="bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => addAccountDialog.show()}
           >

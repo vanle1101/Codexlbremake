@@ -287,6 +287,24 @@ async def export_account_auth(
     return result
 
 
+@router.get("/export-all-json")
+async def export_all_accounts_json(
+    request: Request,
+    response: Response,
+    _write_access=Depends(require_dashboard_write_access),
+    context: AccountsContext = Depends(get_accounts_context),
+):
+    accounts = await context.service.export_all_bulk_json()
+    response.headers["Content-Disposition"] = "attachment; filename=codex_lb_accounts_backup.json"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    AuditService.log_async(
+        "all_accounts_exported",
+        actor_ip=request.client.host if request.client else None,
+        details={"count": len(accounts)},
+    )
+    return accounts
+
+
 @router.post("/{account_id}/export/opencode-auth", response_model=AccountOpenCodeAuthExportResponse, deprecated=True)
 async def export_account_opencode_auth(
     request: Request,
@@ -397,11 +415,13 @@ async def import_account(
     async with bounded_multipart_form(
         request,
         ACCOUNT_IMPORT_MULTIPART_POLICY,
-        typed_upload_fields=("auth_json",),
+        typed_upload_fields=("auth_json", "file"),
     ) as form:
-        auth_json = required_upload(form, "auth_json")
+        upload_item = form.get("auth_json") or form.get("file")
+        if upload_item is None:
+            upload_item = required_upload(form, "auth_json")
         raw = await read_bounded_upload(
-            auth_json,
+            upload_item,
             max_bytes=ACCOUNT_IMPORT_MULTIPART_POLICY.max_file_bytes,
             param="auth_json",
         )

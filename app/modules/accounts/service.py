@@ -613,7 +613,119 @@ class AccountsService:
             logger.debug(f"Could not read active codex account: {e}")
         return CodexActiveAccountResponse(is_active=False)
 
+    async def export_all_bulk_json(self) -> list[dict[str, Any]]:
+        accounts = await self._repo.list_accounts()
+        result = []
+        for a in accounts:
+            try:
+                acc_tok = self._encryptor.decrypt(a.access_token_encrypted) if a.access_token_encrypted else None
+                ref_tok = self._encryptor.decrypt(a.refresh_token_encrypted) if a.refresh_token_encrypted else None
+                id_tok = self._encryptor.decrypt(a.id_token_encrypted) if a.id_token_encrypted else None
+            except Exception:
+                acc_tok, ref_tok, id_tok = None, None, None
+            result.append({
+                "id": a.id,
+                "email": a.email,
+                "chatgpt_account_id": a.chatgpt_account_id,
+                "plan_type": a.plan_type,
+                "alias": a.alias,
+                "workspace_id": a.workspace_id,
+                "workspace_label": a.workspace_label,
+                "routing_policy": getattr(a, "routing_policy", "normal"),
+                "tokens": {
+                    "access_token": acc_tok,
+                    "refresh_token": ref_tok,
+                    "id_token": id_tok,
+                    "account_id": a.chatgpt_account_id,
+                }
+            })
+        return result
+
     async def import_account(self, raw: bytes) -> AccountImportResponse:
+        # Check if raw is a list / bulk format or cockpit export
+        try:
+            bulk_data = json.loads(raw.decode("utf-8"))
+        except Exception:
+            bulk_data = None
+
+        if isinstance(bulk_data, list) or (isinstance(bulk_data, dict) and "accounts" in bulk_data and isinstance(bulk_data["accounts"], list)):
+            items = bulk_data if isinstance(bulk_data, list) else bulk_data["accounts"]
+            saved_list = []
+            for item in items:
+                try:
+                    if not isinstance(item, dict):
+                        continue
+                    tokens = item.get("tokens") or {}
+                    acc_token = tokens.get("access_token") or item.get("access_token")
+                    ref_token = tokens.get("refresh_token") or item.get("refresh_token")
+                    id_token = tokens.get("id_token") or item.get("id_token") or acc_token
+                    chatgpt_acc_id = tokens.get("account_id") or item.get("chatgpt_account_id") or item.get("account_id")
+
+                    if not acc_token:
+                        continue
+
+                    # Only parse JWT claims if email or chatgpt_account_id is missing
+                    claims = None
+                    if not item.get("email") or not chatgpt_acc_id:
+                        try:
+                            auth_dict = {
+                                "tokens": {
+                                    "access_token": acc_token,
+                                    "refresh_token": ref_token or "",
+                                    "id_token": id_token,
+                                    "account_id": chatgpt_acc_id or "",
+                                }
+                            }
+                            parsed_auth = parse_auth_json(json.dumps(auth_dict).encode("utf-8"))
+                            claims = claims_from_auth(parsed_auth)
+                        except Exception:
+                            pass
+
+                    email = item.get("email") or (claims.email if claims else None) or DEFAULT_EMAIL
+                    raw_account_id = chatgpt_acc_id or (claims.account_id if claims else None)
+                    workspace_id = item.get("workspace_id") or (claims.workspace_id if claims else None)
+                    workspace_label = item.get("workspace_label") or (claims.workspace_label if claims else None)
+                    seat_type = item.get("seat_type") or (claims.seat_type if claims else None)
+                    plan_type = item.get("plan_type") or (coerce_account_plan_type(claims.plan_type, DEFAULT_PLAN) if claims else DEFAULT_PLAN)
+                    account_id = item.get("id") or generate_unique_account_id(raw_account_id, email, workspace_id, workspace_label)
+
+                    account = Account(
+                        id=account_id,
+                        chatgpt_account_id=raw_account_id,
+                        email=email,
+                        workspace_id=workspace_id,
+                        workspace_label=workspace_label,
+                        seat_type=seat_type,
+                        plan_type=plan_type,
+                        access_token_encrypted=self._encryptor.encrypt(acc_token),
+                        refresh_token_encrypted=self._encryptor.encrypt(ref_token) if ref_token else self._encryptor.encrypt(""),
+                        id_token_encrypted=self._encryptor.encrypt(id_token) if id_token else self._encryptor.encrypt(""),
+                        last_refresh=utcnow(),
+                        status=AccountStatus.ACTIVE,
+                        deactivation_reason=None,
+                    )
+                    saved = await self._repo.upsert_account_slot(account)
+                    if item.get("alias"):
+                        try:
+                            await self._repo.update_alias(saved.id, item["alias"])
+                        except Exception:
+                            pass
+                    saved_list.append(saved)
+                except Exception as exc:
+                    logger.warning(f"Error importing bulk account item: {exc}")
+                    continue
+
+            get_account_selection_cache().invalidate()
+            if saved_list:
+                return AccountImportResponse(
+                    account_id=f"bulk_{len(saved_list)}",
+                    email=f"{len(saved_list)} accounts",
+                    workspace_id=None,
+                    workspace_label=None,
+                    seat_type=None,
+                    plan_type=saved_list[0].plan_type,
+                    status=AccountStatus.ACTIVE,
+                )
         try:
             auth = parse_auth_json(raw)
         except (json.JSONDecodeError, ValidationError, UnicodeDecodeError, TypeError) as exc:

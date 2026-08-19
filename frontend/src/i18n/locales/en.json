@@ -1545,5 +1545,14 @@
   "accounts.card.switchToCodexTooltip": "Switch to this account (Restart ChatGPT Desktop)",
   "accounts.card.syncQuotaTooltip": "Sync quota",
   "accounts.card.exportAuthTooltip": "Export auth.json",
-  "accounts.card.deleteTooltip": "Delete this account"
+  "accounts.card.deleteTooltip": "Delete this account",
+  "accounts": {
+    "grid": {
+      "exportAllJson": "Export All JSON",
+      "exportAllSuccess": "Downloading all accounts JSON backup file!"
+    },
+    "importDialog": {
+      "description": "Choose a single auth.json or bulk accounts backup JSON file to import."
+    }
+  }
 }

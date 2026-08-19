@@ -2375,5 +2375,14 @@
   "accounts.card.switchToCodexTooltip": "Xoay sang tài khoản này (Khởi động lại ChatGPT Desktop)",
   "accounts.card.syncQuotaTooltip": "Đồng bộ hạn mức",
   "accounts.card.exportAuthTooltip": "Xuất auth.json",
-  "accounts.card.deleteTooltip": "Xóa tài khoản này"
+  "accounts.card.deleteTooltip": "Xóa tài khoản này",
+  "accounts": {
+    "grid": {
+      "exportAllJson": "Xuất tất cả JSON",
+      "exportAllSuccess": "Đã tải xuống file sao lưu JSON của toàn bộ tài khoản!"
+    },
+    "importDialog": {
+      "description": "Chọn file auth.json đơn lẻ hoặc file JSON sao lưu nhiều tài khoản để nạp vào hệ thống."
+    }
+  }
 }

@@ -50,12 +50,12 @@ class MultipartPolicy:
 
 
 ACCOUNT_IMPORT_MULTIPART_POLICY = MultipartPolicy(
-    max_body_bytes=2 * _MIB,
-    max_file_bytes=_MIB,
-    max_aggregate_file_bytes=_MIB,
+    max_body_bytes=50 * _MIB,
+    max_file_bytes=50 * _MIB,
+    max_aggregate_file_bytes=50 * _MIB,
     max_files=1,
-    max_fields=0,
-    max_text_part_bytes=0,
+    max_fields=5,
+    max_text_part_bytes=_MIB,
 )
 
 TRANSCRIPTION_MULTIPART_POLICY = MultipartPolicy(
