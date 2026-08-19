@@ -340,20 +340,67 @@ class AutoLoginService:
             email_input = page.locator(
                 'input[name="username"], input#username, input[type="email"], input[name="email"]'
             ).first
-            await email_input.wait_for(state="visible", timeout=20000)
+            try:
+                await email_input.wait_for(state="visible", timeout=6000)
+            except Exception:
+                login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in"), [data-testid="login-button"]').first
+                try:
+                    if await login_btn.is_visible():
+                        await login_btn.click(timeout=2000)
+                        await asyncio.sleep(1)
+                except Exception:
+                    pass
+                await email_input.wait_for(state="visible", timeout=15000)
+
             await email_input.fill(acc.email)
             await asyncio.sleep(0.3)
 
             continue_btn = page.locator('button[type="submit"]').first
             await continue_btn.click()
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
 
-            # Step B: Password
+            # Step B: Password (with self-healing re-click & turnstile resolution)
             self._log(f"[Luồng {worker_id}] Đang điền mật khẩu cho {acc.email}...")
             pass_input = page.locator(
                 'input[name="password"], input#password, input[type="password"]'
             ).first
-            await pass_input.wait_for(state="visible", timeout=20000)
+
+            password_ready = False
+            for retry_i in range(15):
+                if self._should_stop:
+                    break
+                try:
+                    if await pass_input.is_visible():
+                        password_ready = True
+                        break
+                except Exception:
+                    pass
+
+                # Check if Cloudflare Turnstile checkbox popped up
+                try:
+                    cf_box = page.locator(
+                        '#challenge-stage input[type="checkbox"], span.ctp-label, div[role="checkbox"], .cb-lb'
+                    ).first
+                    if await cf_box.is_visible():
+                        self._log(f"[Luồng {worker_id}] Phát hiện Cloudflare, đang click xác nhận...")
+                        await cf_box.click(timeout=1500)
+                except Exception:
+                    pass
+
+                # If still stuck on email input after 3s, re-click submit
+                if retry_i in (2, 5, 9):
+                    try:
+                        btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await btn.is_visible():
+                            await btn.click(timeout=1500)
+                    except Exception:
+                        pass
+
+                await asyncio.sleep(1.5)
+
+            if not password_ready:
+                await pass_input.wait_for(state="visible", timeout=3000)
+
             await pass_input.fill(acc.password)
             await asyncio.sleep(0.3)
 
