@@ -212,7 +212,7 @@ class AutoLoginService:
             self._should_stop = False
             self._should_pause = False
             self._delay_seconds = delay_seconds
-            self._concurrency = max(1, min(concurrency, 10))
+            self._concurrency = max(1, min(concurrency, 50))
             self._headless = headless
 
             if duplicates_removed > 0:
