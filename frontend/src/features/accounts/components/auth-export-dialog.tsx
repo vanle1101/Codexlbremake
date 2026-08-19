@@ -219,12 +219,21 @@ function AuthExportDialogBody({
   );
 }
 
+export type AuthExportDialogProps = {
+  open: boolean;
+  exportData?: AccountAuthExportResponse | null;
+  data?: AccountAuthExportResponse | null;
+  onOpenChange: (open: boolean) => void;
+};
+
 export function AuthExportDialog({
   open,
   exportData,
+  data,
   onOpenChange,
 }: AuthExportDialogProps) {
   const { t } = useTranslation();
+  const effectiveData = exportData ?? data;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -235,10 +244,10 @@ export function AuthExportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {exportData ? (
+        {effectiveData ? (
           <AuthExportDialogBody
             key={open ? "open" : "closed"}
-            exportData={exportData}
+            exportData={effectiveData}
             onOpenChange={onOpenChange}
           />
         ) : null}
