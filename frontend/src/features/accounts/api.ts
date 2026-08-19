@@ -33,12 +33,15 @@ import {
   RuntimeConnectAddressResponseSchema,
   SwitchToCodexResponseSchema,
   CodexActiveAccountResponseSchema,
+  CodexSubagentsStateResponseSchema,
+  CodexSubagentsToggleRequestSchema,
   DeleteAllAccountsRequestSchema,
   DeleteAllAccountsResponseSchema,
 } from "@/features/accounts/schemas";
 import type {
   AccountRoutingPolicy,
   AccountUsageResetConsumeRequest,
+  CodexSubagentsToggleRequest,
 } from "@/features/accounts/schemas";
 
 const ACCOUNTS_BASE_PATH = "/api/accounts";
@@ -292,4 +295,19 @@ export function autoReauthAll401() {
     `${ACCOUNTS_BASE_PATH}/auto-reauth-all-401`,
     null,
   );
+}
+
+export function retryFailedAutoLogin() {
+  return post(`${ACCOUNTS_BASE_PATH}/auto-login/retry-failed`, AutoLoginStateResponseSchema);
+}
+
+export function getCodexSubagentsState() {
+  return get(`${ACCOUNTS_BASE_PATH}/codex-subagents`, CodexSubagentsStateResponseSchema);
+}
+
+export function toggleCodexSubagents(payload: CodexSubagentsToggleRequest) {
+  const validated = CodexSubagentsToggleRequestSchema.parse(payload);
+  return post(`${ACCOUNTS_BASE_PATH}/codex-subagents/toggle`, CodexSubagentsStateResponseSchema, {
+    body: validated,
+  });
 }

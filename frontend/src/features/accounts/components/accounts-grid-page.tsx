@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { AlertMessage } from "@/components/alert-message";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +49,7 @@ import { ImportDialog } from "@/features/accounts/components/import-dialog";
 import { ReauthCredentialsDialog } from "@/features/accounts/components/reauth-credentials-dialog";
 import { ResetCreditConfirmDialog } from "@/features/accounts/components/reset-credit-confirm-dialog";
 import { launchCodexCli, autoReauthAll401 } from "@/features/accounts/api";
-import { useAccounts, useCodexActiveAccount } from "@/features/accounts/hooks/use-accounts";
+import { useAccounts, useCodexActiveAccount, useCodexSubagents } from "@/features/accounts/hooks/use-accounts";
 import { useOauth } from "@/features/accounts/hooks/use-oauth";
 import type {
   AccountAuthExportResponse,
@@ -96,6 +97,7 @@ export function AccountsGridPage() {
 
   const oauth = useOauth();
   const { data: codexActive } = useCodexActiveAccount();
+  const codexSubagents = useCodexSubagents();
   const canWrite = useAuthStore((state) => state.canWrite);
 
   // Filter & Search states
@@ -408,6 +410,33 @@ export function AccountsGridPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Subagents Switch */}
+          <div
+            className="flex items-center gap-2 rounded-lg border border-border/80 bg-background/60 px-3 py-1.5 shadow-sm transition-colors hover:bg-muted/40 cursor-pointer select-none"
+            title={codexSubagents.enabled ? "Subagents đang BẬT (chạy đa luồng song song trong Codex). Gạt để tắt." : "Subagents đang TẮT (chạy 1 agent đơn). Gạt để bật."}
+            onClick={() => {
+              if (!codexSubagents.isToggling) {
+                codexSubagents.toggle(!codexSubagents.enabled);
+              }
+            }}
+          >
+            <Bot className={cn("h-4 w-4 transition-colors", codexSubagents.enabled ? "text-emerald-500 animate-pulse" : "text-muted-foreground")} />
+            <div className="flex flex-col">
+              <span className="text-xs font-semibold leading-none text-foreground flex items-center gap-1.5">
+                Subagents
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium", codexSubagents.enabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                  {codexSubagents.enabled ? "BẬT" : "TẮT"}
+                </span>
+              </span>
+            </div>
+            <Switch
+              checked={codexSubagents.enabled}
+              disabled={codexSubagents.isToggling}
+              onCheckedChange={(checked) => codexSubagents.toggle(checked)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
           <Button
             type="button"
             variant="outline"

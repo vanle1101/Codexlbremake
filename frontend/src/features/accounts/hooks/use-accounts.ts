@@ -20,6 +20,8 @@ import {
   setAccountAlias,
   switchToCodex,
   getCodexActiveAccount,
+  getCodexSubagentsState,
+  toggleCodexSubagents,
   autoReauthAccount,
   updateAccount,
   updateAccountLimitWarmup,
@@ -317,6 +319,34 @@ export function useCodexActiveAccount() {
     staleTime: 5000,
     refetchInterval: 10000,
   });
+}
+
+export function useCodexSubagents() {
+  const queryClient = useQueryClient();
+  const subagentsQuery = useQuery({
+    queryKey: ["accounts", "codex-subagents"],
+    queryFn: getCodexSubagentsState,
+    staleTime: 3000,
+    refetchInterval: 5000,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (enabled: boolean) => toggleCodexSubagents({ enabled }),
+    onSuccess: (data) => {
+      toast.success(data.message || (data.enabled ? "Đã bật Subagents" : "Đã tắt Subagents"));
+      void queryClient.invalidateQueries({ queryKey: ["accounts", "codex-subagents"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Lỗi cập nhật Subagents");
+    },
+  });
+
+  return {
+    enabled: subagentsQuery.data?.enabled ?? false,
+    isLoading: subagentsQuery.isLoading,
+    toggle: (enabled: boolean) => toggleMutation.mutate(enabled),
+    isToggling: toggleMutation.isPending,
+  };
 }
 
 

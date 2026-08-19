@@ -473,4 +473,15 @@ export const DeleteAllAccountsResponseSchema = z
   }));
 export type DeleteAllAccountsResponse = z.infer<typeof DeleteAllAccountsResponseSchema>;
 
+export const CodexSubagentsStateResponseSchema = z.object({
+  enabled: z.boolean().default(false),
+  message: z.string().nullable().optional(),
+});
+export type CodexSubagentsStateResponse = z.infer<typeof CodexSubagentsStateResponseSchema>;
+
+export const CodexSubagentsToggleRequestSchema = z.object({
+  enabled: z.boolean(),
+});
+export type CodexSubagentsToggleRequest = z.infer<typeof CodexSubagentsToggleRequestSchema>;
+
 

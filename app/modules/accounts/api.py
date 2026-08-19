@@ -53,6 +53,8 @@ from app.modules.accounts.schemas import (
     AutoLoginStartRequest,
     AutoLoginStateResponse,
     CodexActiveAccountResponse,
+    CodexSubagentsStateResponse,
+    CodexSubagentsToggleRequest,
     DeleteAllAccountsRequest,
     DeleteAllAccountsResponse,
     SwitchToCodexResponse,
@@ -167,6 +169,15 @@ async def append_auto_login(
 ) -> AutoLoginStateResponse:
     auto_login_service = get_auto_login_service()
     return await auto_login_service.append(accounts=payload.accounts)
+
+
+@router.post("/auto-login/retry-failed", response_model=AutoLoginStateResponse)
+async def retry_failed_auto_login(
+    oauth_context: OauthContext = Depends(get_oauth_context),
+    _write_access=Depends(require_dashboard_write_access),
+) -> AutoLoginStateResponse:
+    auto_login_service = get_auto_login_service()
+    return await auto_login_service.retry_failed(oauth_service=oauth_context.service)
 
 
 @router.post("/auto-reauth-all-401")
@@ -408,10 +419,67 @@ async def trigger_codex_auto_rotate_check():
     from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
     switcher = get_codex_auto_switcher()
     res = await switcher.check_and_auto_rotate()
-    return {
-        "triggered": res is not None,
-        "result": res,
-    }
+    return {"status": "ok", "rotated": bool(res), "detail": res}
+
+
+@router.get("/codex-subagents", response_model=CodexSubagentsStateResponse)
+def get_codex_subagents_state() -> CodexSubagentsStateResponse:
+    from pathlib import Path
+    config_path = Path.home() / ".codex" / "config.toml"
+    if not config_path.exists():
+        return CodexSubagentsStateResponse(enabled=False)
+    try:
+        content = config_path.read_text(encoding="utf-8")
+        import tomllib
+        data = tomllib.loads(content)
+        enabled = data.get("features", {}).get("multi_agent", False)
+        return CodexSubagentsStateResponse(enabled=bool(enabled))
+    except Exception as e:
+        logger.warning(f"Error reading codex subagents config: {e}")
+        return CodexSubagentsStateResponse(enabled=False)
+
+
+@router.post("/codex-subagents/toggle", response_model=CodexSubagentsStateResponse)
+def toggle_codex_subagents(payload: CodexSubagentsToggleRequest) -> CodexSubagentsStateResponse:
+    import re
+    from pathlib import Path
+    config_path = Path.home() / ".codex" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    target_state = payload.enabled
+    try:
+        content = ""
+        if config_path.exists():
+            content = config_path.read_text(encoding="utf-8")
+        
+        if "[features]" in content:
+            if re.search(r"multi_agent\s*=\s*(true|false)", content, re.IGNORECASE):
+                new_content = re.sub(
+                    r"multi_agent\s*=\s*(true|false)",
+                    f"multi_agent = {'true' if target_state else 'false'}",
+                    content,
+                    flags=re.IGNORECASE,
+                )
+            else:
+                new_content = content.replace("[features]", f"[features]\nmulti_agent = {'true' if target_state else 'false'}")
+        else:
+            new_content = f"""model = "gpt-5.6-luna"
+model_provider = "openai-custom"
+
+[features]
+multi_agent = {'true' if target_state else 'false'}
+
+[model_providers.openai-custom]
+name = "OpenAI Custom (Codex-LB)"
+base_url = "http://localhost:2455/v1"
+api_key = "codex-lb"
+"""
+        config_path.write_text(new_content, encoding="utf-8")
+        msg = "Đã BẬT Subagents (đa luồng) cho Codex!" if target_state else "Đã TẮT Subagents (chế độ đơn) cho Codex!"
+        return CodexSubagentsStateResponse(enabled=target_state, message=msg)
+    except Exception as e:
+        logger.error(f"Error writing codex subagents config: {e}")
+        return CodexSubagentsStateResponse(enabled=False, message=str(e))
 
 
 @router.post(

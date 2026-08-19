@@ -393,3 +393,12 @@ class DeleteAllAccountsResponse(DashboardModel):
     deleted_count: int
     status: str = "deleted"
 
+
+class CodexSubagentsStateResponse(DashboardModel):
+    enabled: bool
+    message: str | None = None
+
+
+class CodexSubagentsToggleRequest(DashboardModel):
+    enabled: bool
+

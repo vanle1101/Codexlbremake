@@ -270,6 +270,27 @@ class AutoLoginService:
                 self._log("ℹ️ Tất cả tài khoản trong danh sách nối thêm đều đã tồn tại trong hàng đợi (đã lọc trùng).")
             return self.get_state_locked()
 
+    async def retry_failed(self, oauth_service: OauthService) -> AutoLoginStateResponse:
+        async with self._lock:
+            if self._status == "running":
+                return self.get_state_locked()
+
+            failed_indices = [i for i, a in enumerate(self._queue) if a.status == "FAILED"]
+            if not failed_indices:
+                self._log("ℹ️ Không có tài khoản nào ở trạng thái lỗi để chạy lại.")
+                return self.get_state_locked()
+
+            for i in failed_indices:
+                self._queue[i].status = "PENDING"
+                self._queue[i].error = None
+
+            self._status = "running"
+            self._should_stop = False
+            self._should_pause = False
+            self._log(f"🔄 Bắt đầu chạy lại {len(failed_indices)} tài khoản bị lỗi...")
+            self._task = asyncio.create_task(self._run_batch(oauth_service))
+            return self.get_state_locked()
+
     def get_state_locked(self) -> AutoLoginStateResponse:
         return AutoLoginStateResponse(
             status=self._status,
@@ -713,13 +734,30 @@ class AutoLoginService:
             workers = [asyncio.create_task(worker(i + 1)) for i in range(concurrency)]
             await asyncio.gather(*workers)
 
+            # Auto Retry Round 2 for failed accounts if any and not cancelled
+            if not self._should_stop:
+                failed_indices = [i for i, a in enumerate(self._queue) if a.status == "FAILED"]
+                if failed_indices:
+                    self._log(
+                        f"🔄 [Vòng 2] Đã hoàn thành vòng 1! Bắt đầu tự động chạy lại {len(failed_indices)} tài khoản bị lỗi...",
+                        level="info",
+                    )
+                    for i in failed_indices:
+                        self._queue[i].status = "PENDING"
+                        self._queue[i].error = None
+                        work_queue.put_nowait(i)
+
+                    retry_concurrency = min(self._concurrency, max(1, work_queue.qsize()))
+                    retry_workers = [asyncio.create_task(worker(i + 1)) for i in range(retry_concurrency)]
+                    await asyncio.gather(*retry_workers)
+
         async with self._lock:
             self._status = "finished"
             success_count = sum(1 for a in self._queue if a.status == "SUCCESS")
             phone_count = sum(1 for a in self._queue if a.status == "PHONE_REQUIRED")
             fail_count = sum(1 for a in self._queue if a.status == "FAILED")
             self._log(
-                f"🎉 Đã hoàn thành batch! (Thành công: {success_count} | Dính SĐT: {phone_count} | Thất bại khác: {fail_count} | Tổng: {len(self._queue)})",
+                f"🎉 Đã hoàn thành toàn bộ tiến trình! (Thành công: {success_count} | Dính SĐT: {phone_count} | Thất bại khác: {fail_count} | Tổng: {len(self._queue)})",
                 level="success",
             )
 
