@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, List
@@ -657,13 +658,13 @@ class AutoLoginService:
         from sqlalchemy import select
 
         async with get_background_session() as db_session:
-            stmt = select(Account).where(
-                Account.status.in_([AccountStatus.UNAUTHORIZED, AccountStatus.REAUTH_REQUIRED, AccountStatus.DEACTIVATED])
+            stmt = select(Account.id, Account.email).where(
+                Account.status.in_([AccountStatus.REAUTH_REQUIRED, AccountStatus.DEACTIVATED])
             )
             result = await db_session.execute(stmt)
-            accounts_401 = list(result.scalars().all())
+            accounts_401_data = [(str(row[0]), str(row[1])) for row in result.all()]
 
-        if not accounts_401:
+        if not accounts_401_data:
             return {
                 "total_401": 0,
                 "reauthed": 0,
@@ -672,12 +673,12 @@ class AutoLoginService:
                 "message": "Không có tài khoản nào đang ở trạng thái lỗi 401.",
             }
 
-        eligible_accounts: list[Account] = []
+        eligible_emails: list[str] = []
         no_credentials_count = 0
         now = time.time()
 
-        for acc in accounts_401:
-            norm_key = normalize_email_key(acc.email)
+        for acc_id, email in accounts_401_data:
+            norm_key = normalize_email_key(email)
             if norm_key not in self._vault:
                 no_credentials_count += 1
                 continue
@@ -685,22 +686,22 @@ class AutoLoginService:
             last_attempt = getattr(self, "_reauth_cooldowns", {}).get(norm_key, 0)
             if now - last_attempt < 300:  # 5 min cooldown for recent failure
                 continue
-            eligible_accounts.append(acc)
+            eligible_emails.append(email)
 
         if not hasattr(self, "_reauth_cooldowns"):
             self._reauth_cooldowns = {}
 
-        if not eligible_accounts:
+        if not eligible_emails:
             return {
-                "total_401": len(accounts_401),
+                "total_401": len(accounts_401_data),
                 "reauthed": 0,
                 "failed": 0,
                 "no_credentials": no_credentials_count,
-                "message": f"Tìm thấy {len(accounts_401)} tài khoản 401 nhưng {no_credentials_count} tài khoản chưa lưu mật khẩu trong Vault.",
+                "message": f"Tìm thấy {len(accounts_401_data)} tài khoản 401 nhưng {no_credentials_count} tài khoản chưa lưu mật khẩu trong Vault.",
             }
 
         self._log(
-            f"⚡ [Auto-Reauth Batch] Bắt đầu tự động đăng nhập lại cho {len(eligible_accounts)} tài khoản 401 có mật khẩu lưu trong Vault...",
+            f"⚡ [Auto-Reauth Batch] Bắt đầu tự động đăng nhập lại cho {len(eligible_emails)} tài khoản 401 có mật khẩu lưu trong Vault...",
             level="info",
         )
 
@@ -708,13 +709,13 @@ class AutoLoginService:
         failed_count = 0
         semaphore = asyncio.Semaphore(max(1, min(concurrency, 4)))
 
-        async def attempt_one(account: Account):
+        async def attempt_one(target_email: str):
             nonlocal reauthed_count, failed_count
-            norm_key = normalize_email_key(account.email)
+            norm_key = normalize_email_key(target_email)
             self._reauth_cooldowns[norm_key] = time.time()
             async with semaphore:
                 success, _ = await self.relogin_single_account(
-                    email=account.email,
+                    email=target_email,
                     oauth_service=oauth_service,
                     headless=True,
                 )
@@ -724,14 +725,14 @@ class AutoLoginService:
                 else:
                     failed_count += 1
 
-        tasks = [asyncio.create_task(attempt_one(acc)) for acc in eligible_accounts]
+        tasks = [asyncio.create_task(attempt_one(em)) for em in eligible_emails]
         await asyncio.gather(*tasks)
 
-        msg = f"Đã khôi phục thành công {reauthed_count}/{len(eligible_accounts)} tài khoản 401!"
+        msg = f"Đã khôi phục thành công {reauthed_count}/{len(eligible_emails)} tài khoản 401!"
         self._log(f"🎉 [Auto-Reauth Batch] {msg} (Thất bại: {failed_count})", level="success" if reauthed_count > 0 else "warning")
 
         return {
-            "total_401": len(accounts_401),
+            "total_401": len(accounts_401_data),
             "reauthed": reauthed_count,
             "failed": failed_count,
             "no_credentials": no_credentials_count,
