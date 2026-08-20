@@ -5485,7 +5485,7 @@ async def _stream_responses(
     payload.stream = True
 
     def build_response_stream() -> AsyncIterator[str]:
-        if prefer_http_bridge:
+        if prefer_http_bridge and proxy_service_module.get_settings().http_responses_session_bridge_enabled:
             return context.service.stream_http_responses(
                 payload,
                 effective_headers,
