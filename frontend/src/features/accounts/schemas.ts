@@ -484,4 +484,13 @@ export const CodexSubagentsToggleRequestSchema = z.object({
 });
 export type CodexSubagentsToggleRequest = z.infer<typeof CodexSubagentsToggleRequestSchema>;
 
+export const AutoReauthAll401ResponseSchema = z.object({
+  total_401: z.number().default(0),
+  reauthed: z.number().default(0),
+  failed: z.number().default(0),
+  no_credentials: z.number().default(0),
+  message: z.string().default(""),
+});
+export type AutoReauthAll401Response = z.infer<typeof AutoReauthAll401ResponseSchema>;
+
 

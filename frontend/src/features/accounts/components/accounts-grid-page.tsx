@@ -333,11 +333,11 @@ export function AccountsGridPage() {
     toast.info("Đang quét Vault và tự động đăng nhập lại các tài khoản 401 ngầm...");
     try {
       const res = await autoReauthAll401();
-      if (res.reauthed > 0) {
+      if (res && res.reauthed > 0) {
         toast.success(res.message || `Đã tự động đăng nhập lại thành công ${res.reauthed} tài khoản!`);
         void accountsQuery.refetch();
       } else {
-        toast.warning(res.message || "Không có tài khoản nào được phục hồi.");
+        toast.warning(res?.message || "Không có tài khoản nào được phục hồi.");
       }
     } catch (e: any) {
       toast.error(e?.message || "Lỗi khi chạy tự động đăng nhập lại");

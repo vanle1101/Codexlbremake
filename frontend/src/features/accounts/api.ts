@@ -37,11 +37,13 @@ import {
   CodexSubagentsToggleRequestSchema,
   DeleteAllAccountsRequestSchema,
   DeleteAllAccountsResponseSchema,
+  AutoReauthAll401ResponseSchema,
 } from "@/features/accounts/schemas";
 import type {
   AccountRoutingPolicy,
   AccountUsageResetConsumeRequest,
   CodexSubagentsToggleRequest,
+  AutoReauthAll401Response,
 } from "@/features/accounts/schemas";
 
 const ACCOUNTS_BASE_PATH = "/api/accounts";
@@ -291,9 +293,9 @@ export function hasAccountCredentials(accountId: string) {
 }
 
 export function autoReauthAll401() {
-  return post<{ total_401: number; reauthed: number; failed: number; no_credentials: number; message: string }>(
+  return post<AutoReauthAll401Response>(
     `${ACCOUNTS_BASE_PATH}/auto-reauth-all-401`,
-    null,
+    AutoReauthAll401ResponseSchema,
   );
 }
 
