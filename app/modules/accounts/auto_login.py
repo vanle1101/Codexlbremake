@@ -436,7 +436,7 @@ class AutoLoginService:
                         await asyncio.sleep(1.5)
 
                     # Wait for password input & resolve Turnstile
-                    pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]').first
+                    pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]:not([aria-hidden="true"])').first
                     pass_found = False
                     for _ in range(15):
                         try:
@@ -498,29 +498,47 @@ class AutoLoginService:
                             break
                         await asyncio.sleep(1)
 
-                    # Extract Web Session with retry loop
-                    for _ in range(12):
-                        session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
-                        if session_resp.status == 200:
-                            session_text = await session_resp.text()
-                            try:
-                                session_json = json.loads(session_text)
-                                if session_json.get("accessToken"):
-                                    from app.db.session import get_background_session
-                                    from app.modules.accounts.repository import AccountsRepository
-                                    from app.modules.accounts.service import AccountsService
-                                    from app.modules.usage.repository import UsageRepository
+                    # Extract Web Session with retry loop using in-page fetch
+                    for _ in range(15):
+                        try:
+                            session_json = await page.evaluate("""async () => {
+                                try {
+                                    const res = await fetch('/api/auth/session');
+                                    return await res.json();
+                                } catch (e) {
+                                    return null;
+                                }
+                            }""")
+                            if isinstance(session_json, dict) and session_json.get("accessToken"):
+                                access_token = session_json["accessToken"]
+                                user = session_json.get("user") or {}
+                                auth_data = {
+                                    "OPENAI_API_KEY": None,
+                                    "tokens": {
+                                        "access_token": access_token,
+                                        "refresh_token": access_token,
+                                        "id_token": access_token,
+                                        "account_id": user.get("id"),
+                                    },
+                                    "last_refresh": session_json.get("expires"),
+                                }
+                                auth_bytes = json.dumps(auth_data).encode("utf-8")
 
-                                    async with get_background_session() as db_session:
-                                        accounts_repo = AccountsRepository(db_session)
-                                        usage_repo = UsageRepository(db_session)
-                                        service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
-                                        await service.import_account(session_text.encode("utf-8"))
-                                    self._log(f"🎉 [Luồng {worker_id}] Đã tự động nạp Web Session thành công cho {acc.email}!", level="success")
-                                    return True
-                            except Exception:
-                                pass
-                        await asyncio.sleep(1)
+                                from app.db.session import get_background_session
+                                from app.modules.accounts.repository import AccountsRepository
+                                from app.modules.accounts.service import AccountsService
+                                from app.modules.usage.repository import UsageRepository
+
+                                async with get_background_session() as db_session:
+                                    accounts_repo = AccountsRepository(db_session)
+                                    usage_repo = UsageRepository(db_session)
+                                    service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
+                                    await service.import_account(auth_bytes)
+                                self._log(f"🎉 [Luồng {worker_id}] Đã lấy Web Session (/api/auth/session) & nạp auth.json thành công cho {acc.email}!", level="success")
+                                return True
+                        except Exception as eval_err:
+                            logger.debug("Session extraction attempt: %s", eval_err)
+                        await asyncio.sleep(1.5)
                 except Exception as fallback_err:
                     logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
                 return False
@@ -1035,6 +1053,7 @@ class AutoLoginService:
         self,
         oauth_service: OauthService,
         concurrency: int = 2,
+        force: bool = False,
     ) -> dict[str, Any]:
         """Scan DB for all accounts requiring reauth/401, match with Vault, and relogin them concurrently."""
         from app.db.session import get_background_session
@@ -1059,7 +1078,11 @@ class AutoLoginService:
 
         eligible_emails: list[str] = []
         no_credentials_count = 0
+        cooldown_count = 0
         now = time.time()
+
+        if not hasattr(self, "_reauth_cooldowns"):
+            self._reauth_cooldowns = {}
 
         for acc_id, email in accounts_401_data:
             norm_key = normalize_email_key(email)
@@ -1067,21 +1090,25 @@ class AutoLoginService:
                 no_credentials_count += 1
                 continue
 
-            last_attempt = getattr(self, "_reauth_cooldowns", {}).get(norm_key, 0)
-            if now - last_attempt < 300:  # 5 min cooldown for recent failure
+            last_attempt = self._reauth_cooldowns.get(norm_key, 0)
+            if not force and now - last_attempt < 300:  # 5 min cooldown for recent failure unless force
+                cooldown_count += 1
                 continue
             eligible_emails.append(email)
 
-        if not hasattr(self, "_reauth_cooldowns"):
-            self._reauth_cooldowns = {}
-
         if not eligible_emails:
+            if cooldown_count > 0 and no_credentials_count == 0:
+                msg = f"Tìm thấy {len(accounts_401_data)} tài khoản 401 nhưng đang trong thời gian chờ giãn cách (5 phút). Vui lòng thử lại sau."
+            elif no_credentials_count > 0:
+                msg = f"Tìm thấy {len(accounts_401_data)} tài khoản 401 ({no_credentials_count} tài khoản chưa lưu mật khẩu trong Vault)."
+            else:
+                msg = f"Không có tài khoản 401 nào sẵn sàng để đăng nhập lại."
             return {
                 "total_401": len(accounts_401_data),
                 "reauthed": 0,
                 "failed": 0,
                 "no_credentials": no_credentials_count,
-                "message": f"Tìm thấy {len(accounts_401_data)} tài khoản 401 nhưng {no_credentials_count} tài khoản chưa lưu mật khẩu trong Vault.",
+                "message": msg,
             }
 
         self._log(
