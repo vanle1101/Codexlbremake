@@ -488,8 +488,8 @@ class AutoLoginService:
                             break
                         await asyncio.sleep(1)
 
-                    # Wait for landing on chatgpt.com or navigate directly
-                    for _ in range(15):
+                    # Wait for landing on chatgpt.com
+                    for _ in range(20):
                         try:
                             await _solve_turnstile(page)
                         except Exception:
@@ -497,13 +497,6 @@ class AutoLoginService:
                         if "chatgpt.com" in page.url and "auth" not in page.url and "login" not in page.url:
                             break
                         await asyncio.sleep(1)
-
-                    if "auth" in page.url or "login" in page.url:
-                        try:
-                            await page.goto("https://chatgpt.com", wait_until="domcontentloaded", timeout=20000)
-                            await asyncio.sleep(2)
-                        except Exception:
-                            pass
 
                     # Extract Web Session with retry loop using in-page fetch
                     for _ in range(15):
