@@ -262,6 +262,8 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
         headless: true,
       });
       setSessionState(resp);
+      setAccountsText("");
+      localStorage.removeItem("codex_auto_login_input_text");
       toast.success(`Đã khởi động tiến trình đăng nhập ngầm (${concurrency} luồng song song)!`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Lỗi khởi động đăng nhập ngầm";
@@ -273,7 +275,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
   const handleAppend = async () => {
     if (parsedAccounts.length === 0) {
-      toast.error("Vui lòng nhập danh sách tài khoản cần thêm vào ô trên.");
+      toast.error("Vui lòng dán danh sách tài khoản mới cần thêm vào ô trên.");
       return;
     }
 
@@ -286,6 +288,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
       });
       setSessionState(resp);
       setAccountsText("");
+      localStorage.removeItem("codex_auto_login_input_text");
       toast.success(`Đã nối thêm ${parsedAccounts.length} tài khoản vào hàng đợi thành công!`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Lỗi thêm tài khoản vào hàng đợi";
@@ -479,11 +482,14 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
               setAccountsText(e.target.value);
               localStorage.setItem("codex_auto_login_input_text", e.target.value);
             }}
-            disabled={isRunning}
-            placeholder={t("accounts.autoLoginDialog.accountsPlaceholder")}
+            placeholder={
+              isRunning
+                ? "💡 Tiến trình đang chạy... Bạn có thể dán thêm danh sách tài khoản mới vào đây rồi bấm nút [+ Nối acc] ở dưới để nối tiếp vào hàng đợi!"
+                : t("accounts.autoLoginDialog.accountsPlaceholder")
+            }
             className={cn(
               "w-full min-h-[130px] rounded-lg border bg-muted/20 p-3 font-mono text-xs outline-none transition-colors",
-              "focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
+              "focus:border-ring focus:ring-1 focus:ring-ring",
             )}
           />
           <p className="text-[11px] text-muted-foreground">{t("accounts.autoLoginDialog.hint")}</p>
