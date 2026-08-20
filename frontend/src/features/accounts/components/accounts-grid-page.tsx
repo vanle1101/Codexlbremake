@@ -409,30 +409,32 @@ export function AccountsGridPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             type="button"
-            className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 font-semibold"
+            size="sm"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
             onClick={() => addAccountDialog.show()}
           >
-            <Plus className="mr-1.5 h-4 w-4" />
+            <Plus className="mr-1 h-3.5 w-3.5" />
             {t("accounts.grid.addAccount")}
           </Button>
 
           <Button
             type="button"
+            size="sm"
             variant="outline"
             disabled={mutationBusy}
             onClick={() => void accountsQuery.refetch()}
             title={t("accounts.grid.refreshList")}
-            className="shrink-0"
+            className="h-8 w-8 p-0"
           >
-            <RefreshCw className={cn("h-4 w-4", accountsQuery.isFetching && "animate-spin")} />
+            <RefreshCw className={cn("h-3.5 w-3.5", accountsQuery.isFetching && "animate-spin")} />
           </Button>
 
           {/* Subagents Switch */}
           <div
-            className="flex items-center gap-2 rounded-lg border border-border/80 bg-background/60 px-2.5 py-1.5 shadow-sm transition-colors hover:bg-muted/40 cursor-pointer select-none shrink-0"
+            className="flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/60 px-2 py-1 shadow-xs transition-colors hover:bg-muted/40 cursor-pointer select-none"
             title={codexSubagents.enabled ? "Subagents đang BẬT (chạy đa luồng song song trong Codex). Gạt để tắt." : "Subagents đang TẮT (chạy 1 agent đơn). Gạt để bật."}
             onClick={() => {
               if (!codexSubagents.isToggling) {
@@ -440,27 +442,27 @@ export function AccountsGridPage() {
               }
             }}
           >
-            <Bot className={cn("h-4 w-4 transition-colors", codexSubagents.enabled ? "text-emerald-500 animate-pulse" : "text-muted-foreground")} />
-            <div className="flex flex-col">
-              <span className="text-xs font-semibold leading-none text-foreground flex items-center gap-1">
-                Subagents
-                <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium", codexSubagents.enabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
-                  {codexSubagents.enabled ? "BẬT" : "TẮT"}
-                </span>
+            <Bot className={cn("h-3.5 w-3.5 transition-colors", codexSubagents.enabled ? "text-emerald-500 animate-pulse" : "text-muted-foreground")} />
+            <span className="text-xs font-semibold leading-none text-foreground flex items-center gap-1">
+              Subagents
+              <span className={cn("text-[9px] px-1 py-0.2 rounded font-medium", codexSubagents.enabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                {codexSubagents.enabled ? "BẬT" : "TẮT"}
               </span>
-            </div>
+            </span>
             <Switch
               checked={codexSubagents.enabled}
               disabled={codexSubagents.isToggling}
               onCheckedChange={(checked) => codexSubagents.toggle(checked)}
               onClick={(e) => e.stopPropagation()}
+              className="scale-90"
             />
           </div>
 
           <Button
             type="button"
+            size="sm"
             variant="outline"
-            className="border-indigo-500/40 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400 font-semibold shrink-0"
+            className="border-indigo-500/40 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400 font-semibold"
             onClick={async () => {
               try {
                 await launchCodexCli();
@@ -470,47 +472,50 @@ export function AccountsGridPage() {
               }
             }}
           >
-            <Zap className="mr-1.5 h-4 w-4 fill-indigo-500 text-indigo-500" />
-            {t("accounts.grid.openCodex")}
+            <Zap className="mr-1 h-3.5 w-3.5 fill-indigo-500 text-indigo-500" />
+            Open Codex
           </Button>
 
           <Button
             type="button"
+            size="sm"
             variant="outline"
-            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold shrink-0"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold"
             onClick={() => {
               window.open("/api/accounts/export-all-txt", "_blank");
               toast.success("Đang tải xuống danh sách tài khoản dạng mail|pass|2fa...");
             }}
             title="Xuất danh sách tất cả tài khoản dạng mail|pass|2fa (.txt)"
           >
-            <Download className="mr-1.5 h-4 w-4" />
-            Xuất TXT (mail|pass|2fa)
+            <Download className="mr-1 h-3.5 w-3.5" />
+            Xuất TXT
           </Button>
 
           <Button
             type="button"
+            size="sm"
             variant="outline"
-            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold shrink-0"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold"
             onClick={() => {
               window.open("/api/accounts/export-all-json", "_blank");
               toast.success(t("accounts.grid.exportAllSuccess"));
             }}
-            title={t("accounts.grid.exportAllJson")}
+            title="Xuất bản sao lưu đầy đủ tất cả tài khoản (.json)"
           >
-            <Download className="mr-1.5 h-4 w-4" />
-            {t("accounts.grid.exportAllJson")}
+            <Download className="mr-1 h-3.5 w-3.5" />
+            Xuất JSON
           </Button>
 
           {totalCount > 0 && (
             <Button
               type="button"
+              size="sm"
               variant="outline"
-              className="border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 font-semibold shrink-0"
+              className="border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 font-semibold"
               onClick={() => deleteAllDialog.show()}
               title="Xoá tất cả tài khoản"
             >
-              <Trash2 className="mr-1.5 h-4 w-4" />
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
               Xoá tất cả ({totalCount})
             </Button>
           )}
