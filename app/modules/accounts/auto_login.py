@@ -570,11 +570,14 @@ class AutoLoginService:
                         await asyncio.sleep(1.5)
 
                         email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
-                        if await email_inp_web.is_visible():
+                        try:
+                            await email_inp_web.wait_for(state="visible", timeout=10000)
                             await email_inp_web.fill(acc.email)
                             await asyncio.sleep(0.3)
                             await page.locator('button[type="submit"]').first.click()
                             await asyncio.sleep(1.5)
+                        except Exception:
+                            pass
 
                         pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]').first
                         try:
