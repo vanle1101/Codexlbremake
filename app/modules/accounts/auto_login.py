@@ -563,13 +563,7 @@ class AutoLoginService:
                     except Exception:
                         pass
 
-                await asyncio.sleep(1.2)n:has-text("Continue"), button:has-text("Tiếp tục")').first
-                        if await btn.is_visible():
-                            await btn.click(timeout=1500)
-                    except Exception:
-                        pass
-
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(1.2)
 
             if not password_ready:
                 try:
@@ -579,7 +573,7 @@ class AutoLoginService:
                         await context.close()
                         await browser.close()
                         return True, 1, None
-                    raise ValueError("Không tìm thấy ô nhập mật khẩu (Timeout)")
+                    raise ValueError("Không tìm thấy ô nhập mật khẩu (Timeout hoặc vướng Cloudflare)")
 
             await pass_input.fill(acc.password)
             await asyncio.sleep(0.3)
