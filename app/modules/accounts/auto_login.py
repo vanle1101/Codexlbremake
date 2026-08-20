@@ -1043,7 +1043,7 @@ class AutoLoginService:
 
         async with get_background_session() as db_session:
             stmt = select(Account.id, Account.email).where(
-                Account.status.in_([AccountStatus.REAUTH_REQUIRED, AccountStatus.DEACTIVATED])
+                Account.status == AccountStatus.REAUTH_REQUIRED
             )
             result = await db_session.execute(stmt)
             accounts_401_data = [(str(row[0]), str(row[1])) for row in result.all()]
