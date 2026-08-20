@@ -385,13 +385,15 @@ export function AccountsGridPage() {
       return;
     }
     setIsDeletingDeactivated(true);
-    toast.info(`Đang xoá ${deact.length} tài khoản vô hiệu hoá...`);
     try {
-      await Promise.all(deact.map((a) => deleteMutation.mutateAsync(a.accountId).catch(() => null)));
-      toast.success(`Đã xoá ${deact.length} tài khoản vô hiệu hoá thành công!`);
+      await deleteAllMutation.mutateAsync({
+        deleteHistory: false,
+        clearVault: true,
+        accountIds: deact.map((a) => a.accountId),
+      });
       void accountsQuery.refetch();
     } catch {
-      toast.error("Lỗi khi xoá tài khoản vô hiệu hoá");
+      // Error handled by deleteAllMutation onError
     } finally {
       setIsDeletingDeactivated(false);
     }
@@ -402,19 +404,12 @@ export function AccountsGridPage() {
     resumeMutation.isPending ||
     probeMutation.isPending ||
     deleteMutation.isPending ||
+    deleteAllMutation.isPending ||
     setAliasMutation.isPending ||
     routingPolicyMutation.isPending ||
     exportAuthMutation.isPending;
 
-  const errorMessage =
-    getErrorMessageOrNull(accountsQuery.error) ||
-    getErrorMessageOrNull(pauseMutation.error) ||
-    getErrorMessageOrNull(resumeMutation.error) ||
-    getErrorMessageOrNull(probeMutation.error) ||
-    getErrorMessageOrNull(deleteMutation.error) ||
-    getErrorMessageOrNull(setAliasMutation.error) ||
-    getErrorMessageOrNull(routingPolicyMutation.error) ||
-    getErrorMessageOrNull(exportAuthMutation.error);
+  const errorMessage = getErrorMessageOrNull(accountsQuery.error);
 
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
@@ -853,7 +848,7 @@ export function AccountsGridPage() {
       ) : null}
 
       {/* Error alert message */}
-      {errorMessage ? (
+      {errorMessage && errorMessage.trim().length > 0 ? (
         <AlertMessage variant="error" message={errorMessage} />
       ) : null}
 
