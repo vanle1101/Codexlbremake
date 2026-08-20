@@ -357,6 +357,29 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
     toast.success(`Đã xuất ${lines.length} tài khoản dính SĐT (định dạng sạch mail|pass|2fa)!`);
   };
 
+  const handleExportDeactivated = () => {
+    const deactList = sessionState.queue.filter(
+      (a) => a.status === "DEACTIVATED" || (a.status === "FAILED" && (a.error || "").toLowerCase().includes("deactivated"))
+    );
+    if (deactList.length === 0) {
+      toast.info("Không có tài khoản nào bị Deactivated.");
+      return;
+    }
+
+    const lines = deactList.map((a) => {
+      const twoFa = a.twoFactorSecret || a.two_factor_secret;
+      return `${a.email}|${a.password}${twoFa ? `|${twoFa}` : ""}`;
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `deactivated_accounts_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${lines.length} tài khoản Deactivated (định dạng sạch mail|pass|2fa)!`);
+  };
+
   const handleClear = () => {
     setAccountsText("");
     void handleCancel();
@@ -365,9 +388,14 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
   const total = sessionState.queue.length > 0 ? sessionState.queue.length : parsedAccounts.length;
   const successCount = sessionState.queue.filter((a) => a.status === "SUCCESS").length;
   const phoneCount = sessionState.queue.filter((a) => a.status === "PHONE_REQUIRED").length;
-  const failCount = sessionState.queue.filter((a) => a.status === "FAILED").length;
-  const pendingCount = Math.max(0, total - successCount - phoneCount - failCount);
-  const progressPercent = total > 0 ? Math.round(((successCount + phoneCount + failCount) / total) * 100) : 0;
+  const deactivatedCount = sessionState.queue.filter(
+    (a) => a.status === "DEACTIVATED" || (a.status === "FAILED" && (a.error || "").toLowerCase().includes("deactivated"))
+  ).length;
+  const failCount = sessionState.queue.filter(
+    (a) => a.status === "FAILED" && !((a.error || "").toLowerCase().includes("deactivated"))
+  ).length;
+  const pendingCount = Math.max(0, total - successCount - phoneCount - deactivatedCount - failCount);
+  const progressPercent = total > 0 ? Math.round(((successCount + phoneCount + deactivatedCount + failCount) / total) * 100) : 0;
   const isRunning = sessionState.status === "running";
 
   return (
@@ -425,7 +453,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
           {/* Stats & Progress */}
           <div className="space-y-3 rounded-lg border bg-muted/10 p-3">
-            <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-xs">
               <div className="rounded border bg-background/50 p-1.5">
                 <span className="block text-[10px] text-muted-foreground">{t("accounts.autoLoginDialog.total")}</span>
                 <span className="font-bold">{total}</span>
@@ -437,6 +465,10 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
               <div className="rounded border border-purple-500/30 bg-purple-500/5 p-1.5 text-purple-600 dark:text-purple-400">
                 <span className="block text-[10px] flex items-center justify-center gap-0.5">📱 Dính SĐT</span>
                 <span className="font-bold">{phoneCount}</span>
+              </div>
+              <div className="rounded border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-600 dark:text-rose-400">
+                <span className="block text-[10px] flex items-center justify-center gap-0.5">🚫 Deactivated</span>
+                <span className="font-bold">{deactivatedCount}</span>
               </div>
               <div className="rounded border border-red-500/30 bg-red-500/5 p-1.5 text-red-600 dark:text-red-400">
                 <span className="block text-[10px]">Lỗi khác</span>
@@ -559,6 +591,19 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
               >
                 <Download className="h-3.5 w-3.5" />
                 Xuất dính SĐT ({phoneCount})
+              </Button>
+            ) : null}
+
+            {deactivatedCount > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleExportDeactivated}
+                className="gap-1 text-xs border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-2.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Xuất Deactivated ({deactivatedCount})
               </Button>
             ) : null}
 

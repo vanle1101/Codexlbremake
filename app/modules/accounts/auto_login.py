@@ -415,6 +415,16 @@ class AutoLoginService:
                 except Exception:
                     pass
 
+                # Check if account is deactivated or deleted
+                try:
+                    page_body = await page.locator("body").inner_text()
+                    if "deactivated" in page_body.lower() or "deleted or deactivated" in page_body.lower() or "account_deactivated" in page_body:
+                        raise ValueError("Tài khoản đã bị OpenAI vô hiệu hoá / xoá (account_deactivated)")
+                except ValueError:
+                    raise
+                except Exception:
+                    pass
+
                 # If still stuck on email input after 3s, re-click submit
                 if retry_i in (2, 5, 9):
                     try:
@@ -730,6 +740,10 @@ class AutoLoginService:
                                 acc.status = "PHONE_REQUIRED"
                                 acc.error = "OpenAI bắt buộc thêm Số Điện Thoại (Chờ xử lý qua Web Session)"
                                 self._log(f"📱 [Luồng {worker_id}] Dính cờ SĐT: {acc.email} -> Chuyển vào tab 'Dính SĐT'", level="warning")
+                            elif err_msg and ("deactivated" in err_msg.lower() or "vô hiệu hoá" in err_msg.lower() or "xoá" in err_msg.lower()):
+                                acc.status = "DEACTIVATED"
+                                acc.error = "Tài khoản đã bị OpenAI vô hiệu hoá / xoá (account_deactivated)"
+                                self._log(f"🚫 [Luồng {worker_id}] Bị khoá: {acc.email} -> Tài khoản đã bị OpenAI vô hiệu hoá (Deactivated)", level="error")
                             else:
                                 acc.status = "FAILED"
                                 acc.error = err_msg or "Quá thời gian xác thực OAuth (Timeout)"
