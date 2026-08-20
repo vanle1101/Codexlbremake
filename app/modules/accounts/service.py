@@ -953,7 +953,7 @@ class AccountsService:
         return result
 
     async def delete_account(self, account_id: str, *, delete_history: bool = False) -> bool:
-        account = await self._repo.get_account(account_id)
+        account = await self._repo.get_by_id(account_id)
         if account and account.email:
             try:
                 from app.modules.accounts.auto_login import get_auto_login_service
