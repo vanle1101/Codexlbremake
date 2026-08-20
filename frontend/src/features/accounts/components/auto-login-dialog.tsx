@@ -414,7 +414,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="sm:max-w-5xl lg:max-w-6xl w-[96vw] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
@@ -470,7 +470,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
           {/* Stats & Progress */}
           <div className="space-y-3 rounded-lg border bg-muted/10 p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
               <div className="rounded border bg-background/50 p-2 shadow-xs">
                 <span className="block text-[10px] text-muted-foreground">{t("accounts.autoLoginDialog.total")}</span>
                 <span className="font-bold text-sm">{total}</span>
