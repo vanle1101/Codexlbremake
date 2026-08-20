@@ -617,15 +617,8 @@ class AutoLoginService:
                 except Exception:
                     pass
 
-                await asyncio.sleep(0.25)
-
             await context.close()
             await browser.close()
-
-            if not success and auth_resp.flow_id:
-                status_check = await oauth_service.oauth_status(flow_id=auth_resp.flow_id)
-                if status_check.status == "success":
-                    success = True
 
             return success, total_workspaces, None
 
