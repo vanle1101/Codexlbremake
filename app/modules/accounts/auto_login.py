@@ -358,6 +358,82 @@ class AutoLoginService:
                 window.chrome = { runtime: {} };
             """)
             page = await context.new_page()
+
+            async def _do_web_session_fallback() -> bool:
+                self._log(f"[Luồng {worker_id}] ⚠️ Đang tự động chuyển sang Web Session login cho {acc.email}...")
+                try:
+                    await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=25000)
+                    await asyncio.sleep(1.5)
+
+                    email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
+                    try:
+                        await email_inp_web.wait_for(state="visible", timeout=10000)
+                        await email_inp_web.fill(acc.email)
+                        await asyncio.sleep(0.3)
+                        await page.locator('button[type="submit"]').first.click()
+                        await asyncio.sleep(1.5)
+                    except Exception:
+                        pass
+
+                    pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]').first
+                    try:
+                        await pass_inp_web.wait_for(state="visible", timeout=8000)
+                        await pass_inp_web.fill(acc.password)
+                        await asyncio.sleep(0.3)
+                        await page.locator('button[type="submit"]').first.click()
+                        await asyncio.sleep(1.5)
+                    except Exception:
+                        pass
+
+                    otp_inp_web = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
+                    try:
+                        await otp_inp_web.wait_for(state="visible", timeout=6000)
+                        if acc.two_factor_secret:
+                            clean_sec = acc.two_factor_secret.replace(" ", "")
+                            try:
+                                code = pyotp.TOTP(clean_sec).now()
+                                self._log(f"[Luồng {worker_id}] Điền OTP Web: {code}...")
+                                await otp_inp_web.fill(code)
+                                await asyncio.sleep(0.2)
+                                await page.keyboard.press("Enter")
+                            except Exception as totp_err:
+                                logger.warning(f"Lỗi tạo OTP Web: {totp_err}")
+                    except Exception:
+                        pass
+
+                    # Wait for landing on chatgpt.com
+                    for _ in range(15):
+                        await asyncio.sleep(1)
+                        if "chatgpt.com" in page.url and "auth" not in page.url:
+                            break
+
+                    # Extract Web Session with retry loop
+                    for _ in range(10):
+                        session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
+                        if session_resp.status == 200:
+                            session_text = await session_resp.text()
+                            try:
+                                session_json = json.loads(session_text)
+                                if session_json.get("accessToken"):
+                                    from app.db.session import get_background_session
+                                    from app.modules.accounts.repository import AccountsRepository
+                                    from app.modules.accounts.service import AccountsService
+                                    from app.modules.usage.repository import UsageRepository
+
+                                    async with get_background_session() as db_session:
+                                        accounts_repo = AccountsRepository(db_session)
+                                        usage_repo = UsageRepository(db_session)
+                                        service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
+                                        await service.import_account(session_text.encode("utf-8"))
+                                    self._log(f"🎉 [Luồng {worker_id}] Đã tự động nạp Web Session thành công cho {acc.email}!", level="success")
+                                    return True
+                            except Exception:
+                                pass
+                        await asyncio.sleep(1)
+                except Exception as fallback_err:
+                    logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
+                return False
+
             target_url = auth_resp.authorization_url or "https://chatgpt.com/auth/login"
             self._log(f"[Luồng {worker_id}] Đang mở Web Auth ChatGPT ({acc.email})...")
             await page.goto(target_url, wait_until="domcontentloaded", timeout=35000)
@@ -437,7 +513,14 @@ class AutoLoginService:
                 await asyncio.sleep(1.5)
 
             if not password_ready:
-                await pass_input.wait_for(state="visible", timeout=3000)
+                try:
+                    await pass_input.wait_for(state="visible", timeout=3000)
+                except Exception:
+                    if await _do_web_session_fallback():
+                        await context.close()
+                        await browser.close()
+                        return True, 1, None
+                    raise ValueError("Không tìm thấy ô nhập mật khẩu (Timeout)")
 
             await pass_input.fill(acc.password)
             await asyncio.sleep(0.3)
@@ -518,30 +601,36 @@ class AutoLoginService:
                         if await otp_input.is_visible():
                             self._log(f"[Luồng {worker_id}] Đang điền mã 2FA cho {acc.email}...")
                             clean_secret = acc.two_factor_secret.strip().replace(" ", "")
-                            totp = pyotp.TOTP(clean_secret)
-                            code = totp.now()
-                            await otp_input.fill(code)
-                            await asyncio.sleep(0.15)
-                            await page.keyboard.press("Enter")
-                            await asyncio.sleep(0.15)
-                            btn = page.locator(
-                                'button[type="submit"], button[name="action"][value="default"], button:has-text("Continue"), button:has-text("Tiếp tục"), button:has-text("Verify"), button:has-text("Xác nhận")'
-                            ).first
-                            if await btn.is_visible():
-                                await btn.click()
-                            otp_filled = True
+                            try:
+                                totp = pyotp.TOTP(clean_secret)
+                                code = totp.now()
+                                await otp_input.fill(code)
+                                await asyncio.sleep(0.15)
+                                await page.keyboard.press("Enter")
+                                await asyncio.sleep(0.15)
+                                btn = page.locator(
+                                    'button[type="submit"], button[name="action"][value="default"], button:has-text("Continue"), button:has-text("Tiếp tục"), button:has-text("Verify"), button:has-text("Xác nhận")'
+                                ).first
+                                if await btn.is_visible():
+                                    await btn.click()
+                                otp_filled = True
+                            except Exception as totp_err:
+                                logger.warning(f"Lỗi tính toán OTP: {totp_err}")
                         else:
                             digit_inputs = await page.locator('input[maxlength="1"], input[data-index]').all()
                             if len(digit_inputs) == 6:
                                 self._log(f"[Luồng {worker_id}] Đang điền 6 số 2FA cho {acc.email}...")
                                 clean_secret = acc.two_factor_secret.strip().replace(" ", "")
-                                totp = pyotp.TOTP(clean_secret)
-                                code = totp.now()
-                                for i, digit in enumerate(code):
-                                    await digit_inputs[i].fill(digit)
-                                    await asyncio.sleep(0.02)
-                                await page.keyboard.press("Enter")
-                                otp_filled = True
+                                try:
+                                    totp = pyotp.TOTP(clean_secret)
+                                    code = totp.now()
+                                    for i, digit in enumerate(code):
+                                        await digit_inputs[i].fill(digit)
+                                        await asyncio.sleep(0.02)
+                                    await page.keyboard.press("Enter")
+                                    otp_filled = True
+                                except Exception as totp_err:
+                                    logger.warning(f"Lỗi tính toán 6 số OTP: {totp_err}")
                     except Exception:
                         pass
 
@@ -564,82 +653,10 @@ class AutoLoginService:
 
                 # Check Phone number required -> Auto Fallback to Web Session Login!
                 if "/add-phone" in current_url or await page.locator('text="Phone number required"').count() > 0:
-                    self._log(f"[Luồng {worker_id}] ⚠️ OAuth yêu cầu SĐT ({acc.email}). Đang tự động chuyển sang Web Session...")
-                    try:
-                        await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=25000)
-                        await asyncio.sleep(1.5)
-
-                        email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
-                        try:
-                            await email_inp_web.wait_for(state="visible", timeout=10000)
-                            await email_inp_web.fill(acc.email)
-                            await asyncio.sleep(0.3)
-                            await page.locator('button[type="submit"]').first.click()
-                            await asyncio.sleep(1.5)
-                        except Exception:
-                            pass
-
-                        pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]').first
-                        try:
-                            await pass_inp_web.wait_for(state="visible", timeout=8000)
-                            await pass_inp_web.fill(acc.password)
-                            await asyncio.sleep(0.3)
-                            await page.locator('button[type="submit"]').first.click()
-                            await asyncio.sleep(1.5)
-                        except Exception:
-                            pass
-
-                        otp_inp_web = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
-                        try:
-                            await otp_inp_web.wait_for(state="visible", timeout=6000)
-                            if acc.two_factor_secret:
-                                clean_sec = acc.two_factor_secret.replace(" ", "")
-                                code = pyotp.TOTP(clean_sec).now()
-                                self._log(f"[Luồng {worker_id}] Điền OTP Web: {code}...")
-                                await otp_inp_web.fill(code)
-                                await asyncio.sleep(0.2)
-                                await page.keyboard.press("Enter")
-                        except Exception:
-                            pass
-
-                        # Wait for landing on chatgpt.com
-                        for _ in range(15):
-                            await asyncio.sleep(1)
-                            if "chatgpt.com" in page.url and "auth" not in page.url:
-                                break
-
-                        # Extract Web Session with retry loop
-                        session_saved = False
-                        for _ in range(10):
-                            session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
-                            if session_resp.status == 200:
-                                session_text = await session_resp.text()
-                                try:
-                                    session_json = json.loads(session_text)
-                                    if session_json.get("accessToken"):
-                                        from app.db.session import get_background_session
-                                        from app.modules.accounts.repository import AccountsRepository
-                                        from app.modules.accounts.service import AccountsService
-                                        from app.modules.usage.repository import UsageRepository
-
-                                        async with get_background_session() as db_session:
-                                            accounts_repo = AccountsRepository(db_session)
-                                            usage_repo = UsageRepository(db_session)
-                                            service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
-                                            await service.import_account(session_text.encode("utf-8"))
-                                        self._log(f"🎉 [Luồng {worker_id}] Đã tự động nạp Web Session thành công cho {acc.email}!", level="success")
-                                        success = True
-                                        session_saved = True
-                                        break
-                                except Exception:
-                                    pass
-                            await asyncio.sleep(1)
-
-                        if session_saved:
-                            break
-                    except Exception as fallback_err:
-                        logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
-
+                    if await _do_web_session_fallback():
+                        await context.close()
+                        await browser.close()
+                        return True, 1, None
                     raise ValueError("OpenAI bắt buộc thêm Số Điện Thoại (Phone number required / SMS)")
 
                 # Check account deactivated or deleted error
@@ -671,6 +688,14 @@ class AutoLoginService:
                     raise
                 except Exception:
                     pass
+
+                await asyncio.sleep(1)
+
+            if not success:
+                if await _do_web_session_fallback():
+                    success = True
+                else:
+                    raise ValueError("Quá thời gian xác thực OAuth (Timeout)")
 
             await context.close()
             await browser.close()
