@@ -351,9 +351,16 @@ class AutoLoginService:
                 viewport={"width": 1280, "height": 800},
                 locale="en-US",
             )
+            await context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                window.chrome = { runtime: {} };
+            """)
             page = await context.new_page()
+            target_url = auth_resp.authorization_url or "https://chatgpt.com/auth/login"
             self._log(f"[Luồng {worker_id}] Đang mở Web Auth ChatGPT ({acc.email})...")
-            await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=35000)
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=35000)
             await asyncio.sleep(1.5)
 
             # Step A: Email
@@ -598,6 +605,18 @@ class AutoLoginService:
                         logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
 
                     raise ValueError("OpenAI bắt buộc thêm Số Điện Thoại (Phone number required / SMS)")
+
+                # Check account deactivated or deleted error
+                try:
+                    page_body = await page.locator("body").inner_text()
+                    if "deactivated" in page_body.lower() or "deleted or deactivated" in page_body.lower() or "account_deactivated" in page_body:
+                        raise ValueError("Tài khoản đã bị OpenAI xoá/vô hiệu hoá (account_deactivated)")
+                    if "wrong password" in page_body.lower() or "incorrect password" in page_body.lower():
+                        raise ValueError("Mật khẩu không chính xác")
+                except ValueError:
+                    raise
+                except Exception:
+                    pass
 
                 # Check invalid 2FA error
                 if await page.locator('text="Invalid code"').count() > 0 or await page.locator('text="Mã không hợp lệ"').count() > 0:
