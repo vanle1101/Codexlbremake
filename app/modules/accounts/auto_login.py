@@ -724,7 +724,9 @@ class AutoLoginService:
                         break
 
                     acc = self._queue[idx]
-                    acc.status = "PROCESSING"
+                    async with self._lock:
+                        acc.status = "PROCESSING"
+                        self._current_index = max(self._current_index, idx + 1)
                     self._log(f"[Luồng {worker_id}] [{idx + 1}/{len(self._queue)}] Bắt đầu đăng nhập: {acc.email}")
 
                     # Step 1: Login Workspace 0

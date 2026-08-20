@@ -172,11 +172,18 @@ export function StatusBar({ onHeightChange }: StatusBarProps = {}) {
     }
     const total = autoLoginState.queue.length;
     const success = autoLoginState.queue.filter((a) => a.status === "SUCCESS").length;
-    const failed = autoLoginState.queue.filter((a) => a.status === "FAILED").length;
-    const processed = success + failed;
-    const currentNum = Math.min(total, processed + 1);
+    const phone = autoLoginState.queue.filter((a) => a.status === "PHONE_REQUIRED").length;
+    const deactivated = autoLoginState.queue.filter(
+      (a) => a.status === "DEACTIVATED" || (a.status === "FAILED" && (a.error || "").toLowerCase().includes("deactivated"))
+    ).length;
+    const failed = autoLoginState.queue.filter(
+      (a) => a.status === "FAILED" && !((a.error || "").toLowerCase().includes("deactivated"))
+    ).length;
+    const processing = autoLoginState.queue.filter((a) => a.status === "PROCESSING").length;
+    const processed = success + phone + deactivated + failed;
+    const currentNum = Math.min(total, Math.max(autoLoginState.current_index || 0, processed + processing, 1));
     const percent = Math.min(100, Math.round((processed / total) * 100));
-    return { total, success, failed, processed, currentNum, percent };
+    return { total, success, phone, deactivated, failed, processing, processed, currentNum, percent };
   }, [autoLoginState]);
 
   useLayoutEffect(() => {
