@@ -479,6 +479,20 @@ export function AccountsGridPage() {
             variant="outline"
             className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold shrink-0"
             onClick={() => {
+              window.open("/api/accounts/export-all-txt", "_blank");
+              toast.success("Đang tải xuống danh sách tài khoản dạng mail|pass|2fa...");
+            }}
+            title="Xuất danh sách tất cả tài khoản dạng mail|pass|2fa (.txt)"
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            Xuất TXT (mail|pass|2fa)
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold shrink-0"
+            onClick={() => {
               window.open("/api/accounts/export-all-json", "_blank");
               toast.success(t("accounts.grid.exportAllSuccess"));
             }}

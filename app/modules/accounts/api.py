@@ -329,6 +329,44 @@ async def export_all_accounts_json(
     return accounts
 
 
+@router.get("/export-all-txt")
+async def export_all_accounts_txt(
+    request: Request,
+    _write_access=Depends(require_dashboard_write_access),
+    context: AccountsContext = Depends(get_accounts_context),
+):
+    from fastapi.responses import PlainTextResponse
+    auto_login_service = get_auto_login_service()
+    accounts = await context.service.get_accounts_overview()
+
+    lines: list[str] = []
+    for acc in accounts:
+        email = acc.email
+        cred = auto_login_service.get_credential(email)
+        if cred and cred.get("password"):
+            pwd = cred["password"]
+            two_fa = cred.get("two_factor_secret")
+            line = f"{email}|{pwd}" + (f"|{two_fa}" if two_fa else "")
+        else:
+            line = email
+        lines.append(line)
+
+    content = "\n".join(lines)
+    AuditService.log_async(
+        "all_accounts_txt_exported",
+        actor_ip=request.client.host if request.client else None,
+        details={"count": len(lines)},
+    )
+    return PlainTextResponse(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=accounts_mail_pass_2fa.txt",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
 @router.post("/{account_id}/export/opencode-auth", response_model=AccountOpenCodeAuthExportResponse, deprecated=True)
 async def export_account_opencode_auth(
     request: Request,

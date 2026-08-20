@@ -840,6 +840,22 @@ class AutoLoginService:
                 level="success",
             )
 
+    def get_credential(self, email: str) -> dict[str, str | None] | None:
+        """Get stored credentials from vault for a given email."""
+        norm_key = normalize_email_key(email)
+        acc = self._vault.get(norm_key)
+        if acc:
+            return {
+                "email": acc.email,
+                "password": acc.password,
+                "two_factor_secret": acc.two_factor_secret,
+            }
+        return None
+
+    def get_all_credentials(self) -> list[AutoLoginAccountItem]:
+        """Get all stored credentials in vault."""
+        return list(self._vault.values())
+
     async def relogin_single_account(
         self,
         email: str,
