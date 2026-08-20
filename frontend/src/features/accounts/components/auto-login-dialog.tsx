@@ -146,7 +146,9 @@ export function parseAccountLine(rawLine: string): AutoLoginAccountItem | null {
 export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLoginDialogProps) {
   const { t } = useTranslation();
 
-  const [accountsText, setAccountsText] = useState("");
+  const [accountsText, setAccountsText] = useState<string>(() => {
+    return localStorage.getItem("codex_auto_login_input_text") || "";
+  });
   const [delaySeconds, setDelaySeconds] = useState(2);
   const [concurrency, setConcurrency] = useState<number>(() => {
     const saved = localStorage.getItem("codex_auto_login_concurrency");
@@ -194,7 +196,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
     };
   }, [accountsText]);
 
-  // Fetch initial status when dialog opens
+  // Fetch initial status when dialog opens and auto-restore input text
   useEffect(() => {
     if (!open) return;
     void getAutoLoginStatus()
@@ -203,6 +205,17 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
         if (state.concurrency) {
           setConcurrency(state.concurrency);
         }
+        setAccountsText((prev) => {
+          if (prev.trim()) return prev;
+          const cached = localStorage.getItem("codex_auto_login_input_text");
+          if (cached && cached.trim()) return cached;
+          if (state.queue && state.queue.length > 0) {
+            return state.queue
+              .map((a) => (a.two_factor_secret ? `${a.email}|${a.password}|${a.two_factor_secret}` : `${a.email}|${a.password}`))
+              .join("\n");
+          }
+          return "";
+        });
       })
       .catch(() => {});
   }, [open]);
@@ -382,6 +395,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
   const handleClear = () => {
     setAccountsText("");
+    localStorage.removeItem("codex_auto_login_input_text");
     void handleCancel();
   };
 
@@ -400,7 +414,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl sm:max-w-5xl lg:max-w-6xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
@@ -440,11 +454,14 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
             id="auto-login-input"
             rows={7}
             value={accountsText}
-            onChange={(e) => setAccountsText(e.target.value)}
+            onChange={(e) => {
+              setAccountsText(e.target.value);
+              localStorage.setItem("codex_auto_login_input_text", e.target.value);
+            }}
             disabled={isRunning}
             placeholder={t("accounts.autoLoginDialog.accountsPlaceholder")}
             className={cn(
-              "w-full min-h-[140px] rounded-lg border bg-muted/20 p-3 font-mono text-xs outline-none transition-colors",
+              "w-full min-h-[130px] rounded-lg border bg-muted/20 p-3 font-mono text-xs outline-none transition-colors",
               "focus:border-ring focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60",
             )}
           />
@@ -453,30 +470,30 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
           {/* Stats & Progress */}
           <div className="space-y-3 rounded-lg border bg-muted/10 p-3">
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center text-xs">
-              <div className="rounded border bg-background/50 p-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-xs">
+              <div className="rounded border bg-background/50 p-2 shadow-xs">
                 <span className="block text-[10px] text-muted-foreground">{t("accounts.autoLoginDialog.total")}</span>
-                <span className="font-bold">{total}</span>
+                <span className="font-bold text-sm">{total}</span>
               </div>
-              <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-1.5 text-emerald-600 dark:text-emerald-400">
+              <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-emerald-600 dark:text-emerald-400 shadow-xs">
                 <span className="block text-[10px]">{t("accounts.autoLoginDialog.success")}</span>
-                <span className="font-bold">{successCount}</span>
+                <span className="font-bold text-sm">{successCount}</span>
               </div>
-              <div className="rounded border border-purple-500/30 bg-purple-500/5 p-1.5 text-purple-600 dark:text-purple-400">
+              <div className="rounded border border-purple-500/30 bg-purple-500/5 p-2 text-purple-600 dark:text-purple-400 shadow-xs">
                 <span className="block text-[10px] flex items-center justify-center gap-0.5">📱 Dính SĐT</span>
-                <span className="font-bold">{phoneCount}</span>
+                <span className="font-bold text-sm">{phoneCount}</span>
               </div>
-              <div className="rounded border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-600 dark:text-rose-400">
+              <div className="rounded border border-rose-500/30 bg-rose-500/10 p-2 text-rose-600 dark:text-rose-400 shadow-xs">
                 <span className="block text-[10px] flex items-center justify-center gap-0.5">🚫 Deactivated</span>
-                <span className="font-bold">{deactivatedCount}</span>
+                <span className="font-bold text-sm">{deactivatedCount}</span>
               </div>
-              <div className="rounded border border-red-500/30 bg-red-500/5 p-1.5 text-red-600 dark:text-red-400">
+              <div className="rounded border border-red-500/30 bg-red-500/5 p-2 text-red-600 dark:text-red-400 shadow-xs">
                 <span className="block text-[10px]">Lỗi khác</span>
-                <span className="font-bold">{failCount}</span>
+                <span className="font-bold text-sm">{failCount}</span>
               </div>
-              <div className="rounded border border-amber-500/30 bg-amber-500/5 p-1.5 text-amber-600 dark:text-amber-400">
+              <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-amber-600 dark:text-amber-400 shadow-xs">
                 <span className="block text-[10px]">{t("accounts.autoLoginDialog.pending")}</span>
-                <span className="font-bold">{pendingCount}</span>
+                <span className="font-bold text-sm">{pendingCount}</span>
               </div>
             </div>
 
