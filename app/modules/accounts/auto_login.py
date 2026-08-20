@@ -567,50 +567,73 @@ class AutoLoginService:
                     self._log(f"[Luồng {worker_id}] ⚠️ OAuth yêu cầu SĐT ({acc.email}). Đang tự động chuyển sang Web Session...")
                     try:
                         await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=25000)
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(1.5)
 
                         email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
                         if await email_inp_web.is_visible():
                             await email_inp_web.fill(acc.email)
-                            await asyncio.sleep(0.2)
+                            await asyncio.sleep(0.3)
                             await page.locator('button[type="submit"]').first.click()
                             await asyncio.sleep(1.5)
 
                         pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]').first
-                        if await pass_inp_web.is_visible():
+                        try:
+                            await pass_inp_web.wait_for(state="visible", timeout=8000)
                             await pass_inp_web.fill(acc.password)
-                            await asyncio.sleep(0.2)
+                            await asyncio.sleep(0.3)
                             await page.locator('button[type="submit"]').first.click()
                             await asyncio.sleep(1.5)
+                        except Exception:
+                            pass
 
                         otp_inp_web = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
-                        if await otp_inp_web.is_visible() and acc.two_factor_secret:
-                            clean_sec = acc.two_factor_secret.replace(" ", "")
-                            code = pyotp.TOTP(clean_sec).now()
-                            await otp_inp_web.fill(code)
-                            await asyncio.sleep(0.2)
-                            await page.keyboard.press("Enter")
-                            await asyncio.sleep(3)
+                        try:
+                            await otp_inp_web.wait_for(state="visible", timeout=6000)
+                            if acc.two_factor_secret:
+                                clean_sec = acc.two_factor_secret.replace(" ", "")
+                                code = pyotp.TOTP(clean_sec).now()
+                                self._log(f"[Luồng {worker_id}] Điền OTP Web: {code}...")
+                                await otp_inp_web.fill(code)
+                                await asyncio.sleep(0.2)
+                                await page.keyboard.press("Enter")
+                        except Exception:
+                            pass
 
-                        # Extract Web Session
-                        session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
-                        if session_resp.status == 200:
-                            session_text = await session_resp.text()
-                            session_json = json.loads(session_text)
-                            if session_json.get("accessToken"):
-                                from app.db.session import get_background_session
-                                from app.modules.accounts.repository import AccountsRepository
-                                from app.modules.accounts.service import AccountsService
-                                from app.modules.usage.repository import UsageRepository
-
-                                async with get_background_session() as db_session:
-                                    accounts_repo = AccountsRepository(db_session)
-                                    usage_repo = UsageRepository(db_session)
-                                    service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
-                                    await service.import_account(session_text.encode("utf-8"))
-                                self._log(f"🎉 [Luồng {worker_id}] Đã tự động nạp Web Session thành công cho {acc.email}!", level="success")
-                                success = True
+                        # Wait for landing on chatgpt.com
+                        for _ in range(15):
+                            await asyncio.sleep(1)
+                            if "chatgpt.com" in page.url and "auth" not in page.url:
                                 break
+
+                        # Extract Web Session with retry loop
+                        session_saved = False
+                        for _ in range(10):
+                            session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
+                            if session_resp.status == 200:
+                                session_text = await session_resp.text()
+                                try:
+                                    session_json = json.loads(session_text)
+                                    if session_json.get("accessToken"):
+                                        from app.db.session import get_background_session
+                                        from app.modules.accounts.repository import AccountsRepository
+                                        from app.modules.accounts.service import AccountsService
+                                        from app.modules.usage.repository import UsageRepository
+
+                                        async with get_background_session() as db_session:
+                                            accounts_repo = AccountsRepository(db_session)
+                                            usage_repo = UsageRepository(db_session)
+                                            service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
+                                            await service.import_account(session_text.encode("utf-8"))
+                                        self._log(f"🎉 [Luồng {worker_id}] Đã tự động nạp Web Session thành công cho {acc.email}!", level="success")
+                                        success = True
+                                        session_saved = True
+                                        break
+                                except Exception:
+                                    pass
+                            await asyncio.sleep(1)
+
+                        if session_saved:
+                            break
                     except Exception as fallback_err:
                         logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
 
