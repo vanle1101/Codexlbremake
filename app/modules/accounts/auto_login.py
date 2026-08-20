@@ -26,37 +26,29 @@ def normalize_email_key(email: str) -> str:
     return email.strip().lower()
 
 
+async def _fill_input_safely(page: Any, locator: Any, value: str) -> None:
+    try:
+        await locator.scroll_into_view_if_needed(timeout=2000)
+    except Exception:
+        pass
+    try:
+        await locator.click(timeout=2000)
+    except Exception:
+        pass
+    await locator.fill(value)
+    try:
+        await locator.evaluate(
+            "(el, val) => { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }",
+            value,
+        )
+    except Exception:
+        pass
+    await asyncio.sleep(0.3)
+
+
 async def _solve_turnstile(page: Any) -> bool:
     try:
-        cf_selectors = [
-            '#challenge-stage input[type="checkbox"]',
-            'span.ctp-label',
-            'div[role="checkbox"]',
-            '.cb-lb',
-            '#turnstile-wrapper input[type="checkbox"]',
-            '[data-testid="turnstile-checkbox"]',
-            'div.cf-turnstile',
-            'iframe[src*="cloudflare"]',
-            'iframe[src*="turnstile"]',
-            'iframe[src*="challenges"]',
-        ]
-        for sel in cf_selectors:
-            loc = page.locator(sel).first
-            if await loc.count() > 0 and await loc.is_visible():
-                box = await loc.bounding_box()
-                if box and box.get("width", 0) > 0 and box.get("height", 0) > 0:
-                    try:
-                        await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-                        await asyncio.sleep(0.08)
-                        await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-                        await asyncio.sleep(0.4)
-                        return True
-                    except Exception:
-                        pass
-                await loc.click(timeout=2000)
-                await asyncio.sleep(0.4)
-                return True
-
+        # 1. Search frames/iframes (Cloudflare Turnstile is almost always in an iframe)
         frames = page.frames if hasattr(page, "frames") and isinstance(page.frames, (list, tuple)) else []
         for frame in frames:
             frame_url = getattr(frame, "url", "")
@@ -75,17 +67,51 @@ async def _solve_turnstile(page: Any) -> bool:
                         if await box.count() > 0 and await box.is_visible():
                             bbox = await box.bounding_box()
                             if bbox and bbox.get("width", 0) > 0:
+                                click_x = bbox["x"] + min(28, bbox["width"] / 2)
+                                click_y = bbox["y"] + bbox["height"] / 2
                                 try:
-                                    await page.mouse.click(bbox["x"] + bbox["width"] / 2, bbox["y"] + bbox["height"] / 2)
-                                    await asyncio.sleep(0.4)
+                                    await page.mouse.click(click_x, click_y)
+                                    await asyncio.sleep(0.5)
                                     return True
                                 except Exception:
                                     pass
-                            await box.click(timeout=2000)
-                            await asyncio.sleep(0.4)
+                            await box.click(timeout=1500)
+                            await asyncio.sleep(0.5)
                             return True
                     except Exception:
                         pass
+
+        # 2. Main page selectors
+        cf_selectors = [
+            'iframe[src*="challenges"]',
+            'iframe[src*="turnstile"]',
+            'iframe[src*="cloudflare"]',
+            '#challenge-stage input[type="checkbox"]',
+            'div[role="checkbox"]',
+            'span.ctp-label',
+            '.cb-lb',
+            '#turnstile-wrapper input[type="checkbox"]',
+            '[data-testid="turnstile-checkbox"]',
+            'div.cf-turnstile',
+        ]
+        for sel in cf_selectors:
+            loc = page.locator(sel).first
+            if await loc.count() > 0 and await loc.is_visible():
+                box = await loc.bounding_box()
+                if box and box.get("width", 0) > 0 and box.get("height", 0) > 0:
+                    click_x = box["x"] + (28 if "iframe" in sel else box["width"] / 2)
+                    click_y = box["y"] + box["height"] / 2
+                    try:
+                        await page.mouse.move(click_x, click_y)
+                        await asyncio.sleep(0.08)
+                        await page.mouse.click(click_x, click_y)
+                        await asyncio.sleep(0.5)
+                        return True
+                    except Exception:
+                        pass
+                await loc.click(timeout=1500)
+                await asyncio.sleep(0.5)
+                return True
     except Exception:
         pass
     return False
@@ -392,8 +418,8 @@ class AutoLoginService:
                         await asyncio.sleep(1)
 
                     if await email_inp_web.is_visible():
-                        await email_inp_web.fill(acc.email)
-                        await asyncio.sleep(0.3)
+                        await _fill_input_safely(page, email_inp_web, acc.email)
+                        await _solve_turnstile(page)
                         submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
                         if await submit_btn.is_visible():
                             await submit_btn.click()
@@ -422,8 +448,8 @@ class AutoLoginService:
                         await asyncio.sleep(1)
 
                     if pass_found:
-                        await pass_inp_web.fill(acc.password)
-                        await asyncio.sleep(0.3)
+                        await _fill_input_safely(page, pass_inp_web, acc.password)
+                        await _solve_turnstile(page)
                         submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
                         if await submit_btn.is_visible():
                             await submit_btn.click()
@@ -513,11 +539,17 @@ class AutoLoginService:
                     pass
                 await email_input.wait_for(state="visible", timeout=15000)
 
-            await email_input.fill(acc.email)
-            await asyncio.sleep(0.3)
+            await _fill_input_safely(page, email_input, acc.email)
+            await _solve_turnstile(page)
 
-            continue_btn = page.locator('button[type="submit"]').first
-            await continue_btn.click()
+            continue_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+            try:
+                if await continue_btn.is_visible():
+                    await continue_btn.click()
+                else:
+                    await page.keyboard.press("Enter")
+            except Exception:
+                await page.keyboard.press("Enter")
             await asyncio.sleep(1.5)
 
             # Step B: Password (with self-healing re-click & turnstile resolution)
@@ -575,14 +607,20 @@ class AutoLoginService:
                         return True, 1, None
                     raise ValueError("Không tìm thấy ô nhập mật khẩu (Timeout hoặc vướng Cloudflare)")
 
-            await pass_input.fill(acc.password)
-            await asyncio.sleep(0.3)
+            await _fill_input_safely(page, pass_input, acc.password)
+            await _solve_turnstile(page)
 
-            submit_btn = page.locator('button[type="submit"]').first
-            await submit_btn.click()
+            submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+            try:
+                if await submit_btn.is_visible():
+                    await submit_btn.click()
+                else:
+                    await page.keyboard.press("Enter")
+            except Exception:
+                await page.keyboard.press("Enter")
             await asyncio.sleep(2)
 
-            # Step C: Loop wait for 2FA / Turnstile / Workspace / Callback
+            # Step C: Loop wait for 2FA / Turnstile / Workspace / Callback / Email Bounce
             success = False
             otp_filled = False
             total_workspaces = 1
@@ -597,6 +635,32 @@ class AutoLoginService:
                     self._log(f"[Luồng {worker_id}] Đã nhận Callback OAuth cho {acc.email}")
                     success = True
                     break
+
+                # Check if page bounced back to email input (loop recovery)
+                try:
+                    em_el = page.locator('input[name="username"], input#username, input[type="email"]').first
+                    pw_el = page.locator('input[name="password"], input#password, input[type="password"]').first
+                    if await em_el.is_visible() and not await pw_el.is_visible():
+                        self._log(f"[Luồng {worker_id}] ⚠️ Trang quay lại ô Email, đang tự động nạp lại & xác minh...")
+                        await _fill_input_safely(page, em_el, acc.email)
+                        await _solve_turnstile(page)
+                        c_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await c_btn.is_visible():
+                            await c_btn.click()
+                        else:
+                            await page.keyboard.press("Enter")
+                        await asyncio.sleep(1.5)
+                        if await pw_el.is_visible():
+                            await _fill_input_safely(page, pw_el, acc.password)
+                            await _solve_turnstile(page)
+                            s_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                            if await s_btn.is_visible():
+                                await s_btn.click()
+                            else:
+                                await page.keyboard.press("Enter")
+                            await asyncio.sleep(2)
+                except Exception:
+                    pass
 
                 # Check Landing on ChatGPT Web
                 if "chatgpt.com" in current_url and "auth.openai.com" not in current_url and "login" not in current_url:
