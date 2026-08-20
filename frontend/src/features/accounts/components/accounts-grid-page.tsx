@@ -481,9 +481,38 @@ export function AccountsGridPage() {
             size="sm"
             variant="outline"
             className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold"
-            onClick={() => {
-              window.open("/api/accounts/export-all-txt", "_blank");
-              toast.success("Đang tải xuống danh sách tài khoản dạng mail|pass|2fa...");
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/accounts/export-all-txt");
+                if (res.ok) {
+                  const text = await res.text();
+                  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `accounts_mail_pass_2fa_${new Date().toISOString().slice(0, 10)}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success("Đã xuất danh sách tài khoản dạng TXT thành công!");
+                  return;
+                }
+              } catch {
+                // fallback below
+              }
+              const accounts = accountsQuery.data?.accounts || [];
+              if (accounts.length === 0) {
+                toast.error("Không có tài khoản nào để xuất.");
+                return;
+              }
+              const lines = accounts.map((a: any) => a.email).filter(Boolean);
+              const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `accounts_${new Date().toISOString().slice(0, 10)}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success(`Đã xuất ${lines.length} tài khoản thành công!`);
             }}
             title="Xuất danh sách tất cả tài khoản dạng mail|pass|2fa (.txt)"
           >
@@ -496,9 +525,25 @@ export function AccountsGridPage() {
             size="sm"
             variant="outline"
             className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold"
-            onClick={() => {
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/accounts/export-all-json");
+                if (res.ok) {
+                  const text = await res.text();
+                  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `codex_lb_accounts_backup_${new Date().toISOString().slice(0, 10)}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success("Đã xuất sao lưu JSON thành công!");
+                  return;
+                }
+              } catch {
+                // fallback
+              }
               window.open("/api/accounts/export-all-json", "_blank");
-              toast.success(t("accounts.grid.exportAllSuccess"));
             }}
             title="Xuất bản sao lưu đầy đủ tất cả tài khoản (.json)"
           >

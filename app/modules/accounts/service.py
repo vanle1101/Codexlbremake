@@ -641,6 +641,25 @@ class AccountsService:
             })
         return result
 
+    async def export_all_bulk_txt(self) -> str:
+        from app.modules.accounts.auto_login import get_auto_login_service
+        auto_login_service = get_auto_login_service()
+        accounts = await self._repo.list_accounts()
+        lines: list[str] = []
+        for a in accounts:
+            email = a.email
+            if not email:
+                continue
+            cred = auto_login_service.get_credential(email)
+            if cred and cred.get("password"):
+                pwd = cred["password"]
+                two_fa = cred.get("two_factor_secret")
+                line = f"{email}|{pwd}" + (f"|{two_fa}" if two_fa else "")
+            else:
+                line = email
+            lines.append(line)
+        return "\n".join(lines)
+
     async def import_account(self, raw: bytes) -> AccountImportResponse:
         # Check if raw is a list / bulk format or cockpit export
         try:

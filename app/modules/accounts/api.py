@@ -336,26 +336,11 @@ async def export_all_accounts_txt(
     context: AccountsContext = Depends(get_accounts_context),
 ):
     from fastapi.responses import PlainTextResponse
-    auto_login_service = get_auto_login_service()
-    accounts = await context.service.get_accounts_overview()
-
-    lines: list[str] = []
-    for acc in accounts:
-        email = acc.email
-        cred = auto_login_service.get_credential(email)
-        if cred and cred.get("password"):
-            pwd = cred["password"]
-            two_fa = cred.get("two_factor_secret")
-            line = f"{email}|{pwd}" + (f"|{two_fa}" if two_fa else "")
-        else:
-            line = email
-        lines.append(line)
-
-    content = "\n".join(lines)
+    content = await context.service.export_all_bulk_txt()
     AuditService.log_async(
         "all_accounts_txt_exported",
         actor_ip=request.client.host if request.client else None,
-        details={"count": len(lines)},
+        details={"length": len(content)},
     )
     return PlainTextResponse(
         content=content,

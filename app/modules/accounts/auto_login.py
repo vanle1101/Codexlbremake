@@ -362,53 +362,110 @@ class AutoLoginService:
             async def _do_web_session_fallback() -> bool:
                 self._log(f"[Luồng {worker_id}] ⚠️ Đang tự động chuyển sang Web Session login cho {acc.email}...")
                 try:
-                    await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=25000)
+                    await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=30000)
                     await asyncio.sleep(1.5)
 
-                    email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
+                    # Check for Cloudflare Challenge
                     try:
-                        await email_inp_web.wait_for(state="visible", timeout=10000)
+                        await _solve_turnstile(page)
+                    except Exception:
+                        pass
+
+                    # Check if there is a "Log in" button before email field
+                    email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
+                    if not await email_inp_web.is_visible():
+                        login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in"), [data-testid="login-button"]').first
+                        try:
+                            if await login_btn.is_visible():
+                                await login_btn.click(timeout=2000)
+                                await asyncio.sleep(1.5)
+                        except Exception:
+                            pass
+
+                    for _ in range(12):
+                        try:
+                            await _solve_turnstile(page)
+                        except Exception:
+                            pass
+                        if await email_inp_web.is_visible():
+                            break
+                        await asyncio.sleep(1)
+
+                    if await email_inp_web.is_visible():
                         await email_inp_web.fill(acc.email)
                         await asyncio.sleep(0.3)
-                        await page.locator('button[type="submit"]').first.click()
+                        submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await submit_btn.is_visible():
+                            await submit_btn.click()
+                        else:
+                            await page.keyboard.press("Enter")
                         await asyncio.sleep(1.5)
-                    except Exception:
-                        pass
 
+                    # Wait for password input & resolve Turnstile
                     pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]').first
-                    try:
-                        await pass_inp_web.wait_for(state="visible", timeout=8000)
+                    pass_found = False
+                    for _ in range(15):
+                        try:
+                            await _solve_turnstile(page)
+                        except Exception:
+                            pass
+                        if await pass_inp_web.is_visible():
+                            pass_found = True
+                            break
+                        # If still stuck on email step, re-submit
+                        btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await btn.is_visible() and await email_inp_web.is_visible():
+                            try:
+                                await btn.click(timeout=1500)
+                            except Exception:
+                                pass
+                        await asyncio.sleep(1)
+
+                    if pass_found:
                         await pass_inp_web.fill(acc.password)
                         await asyncio.sleep(0.3)
-                        await page.locator('button[type="submit"]').first.click()
-                        await asyncio.sleep(1.5)
-                    except Exception:
-                        pass
+                        submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await submit_btn.is_visible():
+                            await submit_btn.click()
+                        else:
+                            await page.keyboard.press("Enter")
+                        await asyncio.sleep(2)
 
+                    # Wait for OTP or landing
                     otp_inp_web = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
-                    try:
-                        await otp_inp_web.wait_for(state="visible", timeout=6000)
-                        if acc.two_factor_secret:
-                            clean_sec = acc.two_factor_secret.replace(" ", "")
-                            try:
-                                code = pyotp.TOTP(clean_sec).now()
-                                self._log(f"[Luồng {worker_id}] Điền OTP Web: {code}...")
-                                await otp_inp_web.fill(code)
-                                await asyncio.sleep(0.2)
-                                await page.keyboard.press("Enter")
-                            except Exception as totp_err:
-                                logger.warning(f"Lỗi tạo OTP Web: {totp_err}")
-                    except Exception:
-                        pass
-
-                    # Wait for landing on chatgpt.com
-                    for _ in range(15):
-                        await asyncio.sleep(1)
+                    for _ in range(10):
+                        try:
+                            await _solve_turnstile(page)
+                        except Exception:
+                            pass
+                        if await otp_inp_web.is_visible():
+                            if acc.two_factor_secret:
+                                clean_sec = acc.two_factor_secret.replace(" ", "")
+                                try:
+                                    code = pyotp.TOTP(clean_sec).now()
+                                    self._log(f"[Luồng {worker_id}] Điền OTP Web: {code}...")
+                                    await otp_inp_web.fill(code)
+                                    await asyncio.sleep(0.2)
+                                    await page.keyboard.press("Enter")
+                                except Exception as totp_err:
+                                    logger.warning(f"Lỗi tạo OTP Web: {totp_err}")
+                            break
                         if "chatgpt.com" in page.url and "auth" not in page.url:
                             break
+                        await asyncio.sleep(1)
+
+                    # Wait for landing on chatgpt.com
+                    for _ in range(20):
+                        try:
+                            await _solve_turnstile(page)
+                        except Exception:
+                            pass
+                        if "chatgpt.com" in page.url and "auth" not in page.url and "login" not in page.url:
+                            break
+                        await asyncio.sleep(1)
 
                     # Extract Web Session with retry loop
-                    for _ in range(10):
+                    for _ in range(12):
                         session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
                         if session_resp.status == 200:
                             session_text = await session_resp.text()
@@ -470,7 +527,7 @@ class AutoLoginService:
             ).first
 
             password_ready = False
-            for retry_i in range(15):
+            for retry_i in range(18):
                 if self._should_stop:
                     break
                 try:
@@ -480,14 +537,10 @@ class AutoLoginService:
                 except Exception:
                     pass
 
-                # Check if Cloudflare Turnstile checkbox popped up
+                # Check if Cloudflare Turnstile checkbox popped up and solve it
                 try:
-                    cf_box = page.locator(
-                        '#challenge-stage input[type="checkbox"], span.ctp-label, div[role="checkbox"], .cb-lb'
-                    ).first
-                    if await cf_box.is_visible():
-                        self._log(f"[Luồng {worker_id}] Phát hiện Cloudflare, đang click xác nhận...")
-                        await cf_box.click(timeout=1500)
+                    if await _solve_turnstile(page):
+                        self._log(f"[Luồng {worker_id}] Đã click xác nhận Cloudflare Turnstile cho {acc.email}!")
                 except Exception:
                     pass
 
@@ -502,9 +555,15 @@ class AutoLoginService:
                     pass
 
                 # If still stuck on email input after 3s, re-click submit
-                if retry_i in (2, 5, 9):
+                if retry_i in (2, 5, 9, 13):
                     try:
                         btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await btn.is_visible():
+                            await btn.click(timeout=1500)
+                    except Exception:
+                        pass
+
+                await asyncio.sleep(1.2)n:has-text("Continue"), button:has-text("Tiếp tục")').first
                         if await btn.is_visible():
                             await btn.click(timeout=1500)
                     except Exception:
