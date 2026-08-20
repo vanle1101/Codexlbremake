@@ -349,6 +349,27 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
     toast.success(`Đã xuất ${lines.length} tài khoản lỗi (định dạng sạch mail|pass|2fa)!`);
   };
 
+  const handleExportSuccess = () => {
+    const successList = sessionState.queue.filter((a) => a.status === "SUCCESS");
+    if (successList.length === 0) {
+      toast.info("Không có tài khoản nào thành công để xuất.");
+      return;
+    }
+
+    const lines = successList.map((a) => {
+      const twoFa = a.twoFactorSecret || a.two_factor_secret;
+      return `${a.email}|${a.password}${twoFa ? `|${twoFa}` : ""}`;
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `success_accounts_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${lines.length} tài khoản thành công (định dạng sạch mail|pass|2fa)!`);
+  };
+
   const handleExportPhoneRequired = () => {
     const phoneList = sessionState.queue.filter((a) => a.status === "PHONE_REQUIRED");
     if (phoneList.length === 0) {
@@ -598,6 +619,19 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {successCount > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleExportSuccess}
+                className="gap-1 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 px-2.5"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Xuất thành công ({successCount})
+              </Button>
+            ) : null}
+
             {phoneCount > 0 ? (
               <Button
                 type="button"
