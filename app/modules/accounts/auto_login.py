@@ -1013,6 +1013,18 @@ class AutoLoginService:
                     return True, None
                 else:
                     err = err_msg or "Xác thực OAuth thất bại hoặc quá thời gian."
+                    if err_msg and any(k in err_msg.lower() for k in ["deactivated", "vô hiệu hoá", "xoá", "bị khoá"]):
+                        from app.db.session import get_background_session
+                        from app.db.models import Account, AccountStatus
+                        from sqlalchemy import update
+                        try:
+                            async with get_background_session() as db_sess:
+                                await db_sess.execute(
+                                    update(Account).where(Account.email == acc.email).values(status=AccountStatus.DEACTIVATED)
+                                )
+                                await db_sess.commit()
+                        except Exception:
+                            pass
                     self._log(f"❌ [401 Auto-Recovery] Thất bại cho {acc.email}: {err}", level="error")
                     return False, err
         except Exception as e:

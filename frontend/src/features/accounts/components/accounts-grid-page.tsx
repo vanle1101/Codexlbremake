@@ -416,6 +416,23 @@ export function AccountsGridPage() {
     getErrorMessageOrNull(routingPolicyMutation.error) ||
     getErrorMessageOrNull(exportAuthMutation.error);
 
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([
+        accountsQuery.refetch(),
+        new Promise((resolve) => setTimeout(resolve, 600)),
+      ]);
+      toast.success("Đã làm mới danh sách & hạn mức tài khoản!");
+    } catch {
+      toast.error("Lỗi khi làm mới dữ liệu");
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  };
+
   const isSwitchingAny = switchToCodexMutation.isPending;
   const switchingAccountId = switchToCodexMutation.isPending ? switchToCodexMutation.variables : null;
 
@@ -448,12 +465,13 @@ export function AccountsGridPage() {
             type="button"
             size="sm"
             variant="outline"
-            disabled={mutationBusy}
-            onClick={() => void accountsQuery.refetch()}
-            title={t("accounts.grid.refreshList")}
-            className="h-8 w-8 p-0"
+            disabled={mutationBusy || isManualRefreshing}
+            onClick={handleManualRefresh}
+            title="Làm mới danh sách & hạn mức quota tài khoản"
+            className="h-8 px-2.5 text-xs font-medium gap-1 text-muted-foreground hover:text-foreground"
           >
-            <RefreshCw className={cn("h-3.5 w-3.5", accountsQuery.isFetching && "animate-spin")} />
+            <RefreshCw className={cn("h-3.5 w-3.5", (isManualRefreshing || accountsQuery.isFetching) && "animate-spin text-primary")} />
+            <span className="hidden sm:inline">Làm mới</span>
           </Button>
 
           {/* Subagents Switch */}
