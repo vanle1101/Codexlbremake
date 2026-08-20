@@ -398,21 +398,41 @@ export function AccountsGridPage() {
   return (
     <div className="space-y-6">
       {/* 1. Header & Summary Stats */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="shrink-0">
           <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Users className="h-6 w-6 text-primary" />
             {t("accounts.grid.title")}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {t("accounts.grid.description")}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap overflow-x-auto pb-1 sm:pb-0">
+          <Button
+            type="button"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 font-semibold"
+            onClick={() => addAccountDialog.show()}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            {t("accounts.grid.addAccount")}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={mutationBusy}
+            onClick={() => void accountsQuery.refetch()}
+            title={t("accounts.grid.refreshList")}
+            className="shrink-0"
+          >
+            <RefreshCw className={cn("h-4 w-4", accountsQuery.isFetching && "animate-spin")} />
+          </Button>
+
           {/* Subagents Switch */}
           <div
-            className="flex items-center gap-2 rounded-lg border border-border/80 bg-background/60 px-3 py-1.5 shadow-sm transition-colors hover:bg-muted/40 cursor-pointer select-none"
+            className="flex items-center gap-2 rounded-lg border border-border/80 bg-background/60 px-2.5 py-1.5 shadow-sm transition-colors hover:bg-muted/40 cursor-pointer select-none shrink-0"
             title={codexSubagents.enabled ? "Subagents đang BẬT (chạy đa luồng song song trong Codex). Gạt để tắt." : "Subagents đang TẮT (chạy 1 agent đơn). Gạt để bật."}
             onClick={() => {
               if (!codexSubagents.isToggling) {
@@ -422,7 +442,7 @@ export function AccountsGridPage() {
           >
             <Bot className={cn("h-4 w-4 transition-colors", codexSubagents.enabled ? "text-emerald-500 animate-pulse" : "text-muted-foreground")} />
             <div className="flex flex-col">
-              <span className="text-xs font-semibold leading-none text-foreground flex items-center gap-1.5">
+              <span className="text-xs font-semibold leading-none text-foreground flex items-center gap-1">
                 Subagents
                 <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium", codexSubagents.enabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
                   {codexSubagents.enabled ? "BẬT" : "TẮT"}
@@ -440,7 +460,7 @@ export function AccountsGridPage() {
           <Button
             type="button"
             variant="outline"
-            className="border-indigo-500/40 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400 font-semibold"
+            className="border-indigo-500/40 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400 font-semibold shrink-0"
             onClick={async () => {
               try {
                 await launchCodexCli();
@@ -450,21 +470,21 @@ export function AccountsGridPage() {
               }
             }}
           >
-            <Zap className="mr-2 h-4 w-4 fill-indigo-500 text-indigo-500" />
+            <Zap className="mr-1.5 h-4 w-4 fill-indigo-500 text-indigo-500" />
             {t("accounts.grid.openCodex")}
           </Button>
 
           <Button
             type="button"
             variant="outline"
-            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 font-semibold shrink-0"
             onClick={() => {
               window.open("/api/accounts/export-all-json", "_blank");
               toast.success(t("accounts.grid.exportAllSuccess"));
             }}
             title={t("accounts.grid.exportAllJson")}
           >
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="mr-1.5 h-4 w-4" />
             {t("accounts.grid.exportAllJson")}
           </Button>
 
@@ -472,33 +492,14 @@ export function AccountsGridPage() {
             <Button
               type="button"
               variant="outline"
-              className="border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 font-semibold"
+              className="border-red-500/40 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400 font-semibold shrink-0"
               onClick={() => deleteAllDialog.show()}
               title="Xoá tất cả tài khoản"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-1.5 h-4 w-4" />
               Xoá tất cả ({totalCount})
             </Button>
           )}
-
-          <Button
-            type="button"
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => addAccountDialog.show()}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            {t("accounts.grid.addAccount")}
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            disabled={mutationBusy}
-            onClick={() => void accountsQuery.refetch()}
-            title={t("accounts.grid.refreshList")}
-          >
-            <RefreshCw className={cn("h-4 w-4", accountsQuery.isFetching && "animate-spin")} />
-          </Button>
         </div>
       </div>
 
