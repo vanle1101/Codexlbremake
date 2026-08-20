@@ -642,11 +642,14 @@ class AccountsService:
         return result
 
     async def export_all_bulk_txt(self) -> str:
+        from app.db.models import AccountStatus
         from app.modules.accounts.auto_login import get_auto_login_service
         auto_login_service = get_auto_login_service()
         accounts = await self._repo.list_accounts()
         lines: list[str] = []
         for a in accounts:
+            if a.status in (AccountStatus.DEACTIVATED, getattr(AccountStatus, "ERROR", "error")):
+                continue
             email = a.email
             if not email:
                 continue
@@ -950,6 +953,13 @@ class AccountsService:
         return result
 
     async def delete_account(self, account_id: str, *, delete_history: bool = False) -> bool:
+        account = await self._repo.get_account(account_id)
+        if account and account.email:
+            try:
+                from app.modules.accounts.auto_login import get_auto_login_service
+                get_auto_login_service().remove_credential(account.email)
+            except Exception:
+                pass
         # Fast path: stamp the pending-deletion marker (terminal status, hidden
         # from listings, sticky/bridge cleanup) and return in milliseconds; the
         # background deletion worker drains the bulk rows and removes the

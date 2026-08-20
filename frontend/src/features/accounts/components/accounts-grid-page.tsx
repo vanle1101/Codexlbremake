@@ -74,7 +74,7 @@ const AutoLoginDialog = lazy(() =>
   })),
 );
 
-type StatusFilter = "all" | "active" | "exceeded" | "paused" | "401";
+type StatusFilter = "all" | "active" | "exceeded" | "paused" | "401" | "deactivated";
 type PlanFilter = "all" | "plus" | "team" | "pro" | "free";
 type SortOption = "quota_desc" | "quota_asc" | "credits_desc" | "newest" | "name_asc";
 
@@ -164,7 +164,8 @@ export function AccountsGridPage() {
     if (statusFilter !== "all") {
       list = list.filter((a) => {
         const s = normalizeStatus(a.status);
-        if (statusFilter === "401") return s === "reauth" || s === "deactivated" || a.status === "reauth_required" || s === "error";
+        if (statusFilter === "deactivated") return s === "deactivated" || a.status === "deactivated";
+        if (statusFilter === "401") return (s === "reauth" || a.status === "reauth_required" || s === "error") && s !== "deactivated" && a.status !== "deactivated";
         if (statusFilter === "active") return s === "active";
         if (statusFilter === "exceeded") return s === "exceeded" || s === "limited";
         if (statusFilter === "paused") return s === "paused";
@@ -365,13 +366,36 @@ export function AccountsGridPage() {
     (a) => normalizeStatus(a.status) === "exceeded" || normalizeStatus(a.status) === "limited",
   ).length;
   const pausedCount = rawAccounts.filter((a) => normalizeStatus(a.status) === "paused").length;
+  const deactivatedCount = rawAccounts.filter(
+    (a) => normalizeStatus(a.status) === "deactivated" || a.status === "deactivated",
+  ).length;
   const error401Count = rawAccounts.filter(
     (a) =>
-      normalizeStatus(a.status) === "reauth" ||
-      normalizeStatus(a.status) === "deactivated" ||
-      a.status === "reauth_required" ||
-      normalizeStatus(a.status) === "error",
+      (normalizeStatus(a.status) === "reauth" || a.status === "reauth_required" || normalizeStatus(a.status) === "error") &&
+      normalizeStatus(a.status) !== "deactivated" &&
+      a.status !== "deactivated",
   ).length;
+
+  const [isDeletingDeactivated, setIsDeletingDeactivated] = useState(false);
+
+  const handleDeleteDeactivated = async () => {
+    const deact = rawAccounts.filter((a) => normalizeStatus(a.status) === "deactivated" || a.status === "deactivated");
+    if (deact.length === 0) return;
+    if (!window.confirm(`Bạn có chắc muốn xoá ${deact.length} tài khoản đã bị OpenAI vô hiệu hoá không?`)) {
+      return;
+    }
+    setIsDeletingDeactivated(true);
+    toast.info(`Đang xoá ${deact.length} tài khoản vô hiệu hoá...`);
+    try {
+      await Promise.all(deact.map((a) => deleteMutation.mutateAsync(a.accountId).catch(() => null)));
+      toast.success(`Đã xoá ${deact.length} tài khoản vô hiệu hoá thành công!`);
+      void accountsQuery.refetch();
+    } catch {
+      toast.error("Lỗi khi xoá tài khoản vô hiệu hoá");
+    } finally {
+      setIsDeletingDeactivated(false);
+    }
+  };
 
   const mutationBusy =
     pauseMutation.isPending ||
@@ -465,8 +489,8 @@ export function AccountsGridPage() {
             className="border-indigo-500/40 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400 font-semibold"
             onClick={async () => {
               try {
-                await launchCodexCli();
-                toast.success(t("accounts.grid.codexLaunched"));
+                const res = await launchCodexCli();
+                toast.success(res.message || t("accounts.grid.codexLaunchSuccess"));
               } catch (e: any) {
                 toast.error(e?.message || t("accounts.grid.codexLaunchError"));
               }
@@ -494,7 +518,7 @@ export function AccountsGridPage() {
                     a.download = `accounts_mail_pass_2fa_${new Date().toISOString().slice(0, 10)}.txt`;
                     a.click();
                     URL.revokeObjectURL(url);
-                    toast.success("Đã xuất danh sách tài khoản dạng TXT thành công!");
+                    toast.success("Đã xuất danh sách tài khoản hợp lệ dạng TXT thành công!");
                     return;
                   }
                 }
@@ -502,11 +526,12 @@ export function AccountsGridPage() {
                 // fallback below
               }
               const accList = Array.isArray(accountsQuery.data) ? accountsQuery.data : (accountsQuery.data as any)?.accounts || [];
-              if (accList.length === 0) {
+              const validList = accList.filter((a: any) => normalizeStatus(a.status) !== "deactivated" && a.status !== "deactivated");
+              if (validList.length === 0) {
                 toast.error("Không có tài khoản nào để xuất.");
                 return;
               }
-              const lines = accList.map((a: any) => a.email).filter(Boolean);
+              const lines = validList.map((a: any) => a.email).filter(Boolean);
               const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -516,7 +541,7 @@ export function AccountsGridPage() {
               URL.revokeObjectURL(url);
               toast.success(`Đã xuất ${lines.length} tài khoản thành công!`);
             }}
-            title="Xuất danh sách tất cả tài khoản dạng mail|pass|2fa (.txt)"
+            title="Xuất danh sách tất cả tài khoản hợp lệ dạng mail|pass|2fa (.txt)"
           >
             <Download className="mr-1 h-3.5 w-3.5" />
             Xuất TXT
@@ -584,7 +609,7 @@ export function AccountsGridPage() {
       </div>
 
       {/* 2. Stat badges */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div
           onClick={() => setStatusFilter("all")}
           className={cn(
@@ -654,6 +679,35 @@ export function AccountsGridPage() {
           </div>
           <div className="text-xl font-bold text-red-600 dark:text-red-400 mt-1">{error401Count}</div>
         </div>
+        <div
+          onClick={() => setStatusFilter(statusFilter === "deactivated" ? "all" : "deactivated")}
+          className={cn(
+            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors relative overflow-hidden",
+            statusFilter === "deactivated" ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-500/5" : "hover:border-rose-500/50",
+          )}
+        >
+          <div className="flex items-center justify-between gap-1">
+            <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">🚫 Vô hiệu hoá</div>
+            {deactivatedCount > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isDeletingDeactivated}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleDeleteDeactivated();
+                }}
+                className="h-6 px-2 text-[11px] font-semibold border-rose-500/40 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400 shrink-0"
+                title="Xoá tất cả tài khoản đã bị OpenAI vô hiệu hoá"
+              >
+                <Trash2 className={cn("mr-1 h-3 w-3", isDeletingDeactivated && "animate-spin")} />
+                {isDeletingDeactivated ? "Đang xoá..." : "Xoá"}
+              </Button>
+            ) : null}
+          </div>
+          <div className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">{deactivatedCount}</div>
+        </div>
       </div>
 
       {/* 3. Filter & Search Toolbar */}
@@ -671,7 +725,7 @@ export function AccountsGridPage() {
           </div>
 
           <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as StatusFilter)}>
-            <SelectTrigger className="w-[170px] text-xs">
+            <SelectTrigger className="w-[180px] text-xs">
               <SelectValue placeholder={t("accounts.grid.statusPlaceholder")} />
             </SelectTrigger>
             <SelectContent className="text-xs">
@@ -680,6 +734,7 @@ export function AccountsGridPage() {
               <SelectItem value="exceeded">{t("accounts.grid.status.exceeded", { count: exceededCount })}</SelectItem>
               <SelectItem value="paused">{t("accounts.grid.status.paused", { count: pausedCount })}</SelectItem>
               <SelectItem value="401">{t("accounts.grid.status.reauth", { count: error401Count })}</SelectItem>
+              <SelectItem value="deactivated">🚫 Vô hiệu hoá ({deactivatedCount})</SelectItem>
             </SelectContent>
           </Select>
 

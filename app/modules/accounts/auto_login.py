@@ -189,6 +189,14 @@ class AutoLoginService:
         )
         self._save_vault()
 
+    def remove_credential(self, email: str) -> bool:
+        norm_key = normalize_email_key(email)
+        if norm_key in self._vault:
+            del self._vault[norm_key]
+            self._save_vault()
+            return True
+        return False
+
     def clear_vault(self) -> None:
         self._vault = {}
         self._save_vault()
