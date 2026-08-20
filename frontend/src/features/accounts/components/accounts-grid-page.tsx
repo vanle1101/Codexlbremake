@@ -486,25 +486,27 @@ export function AccountsGridPage() {
                 const res = await fetch("/api/accounts/export-all-txt");
                 if (res.ok) {
                   const text = await res.text();
-                  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `accounts_mail_pass_2fa_${new Date().toISOString().slice(0, 10)}.txt`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  toast.success("Đã xuất danh sách tài khoản dạng TXT thành công!");
-                  return;
+                  if (text && text.trim().length > 0) {
+                    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `accounts_mail_pass_2fa_${new Date().toISOString().slice(0, 10)}.txt`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Đã xuất danh sách tài khoản dạng TXT thành công!");
+                    return;
+                  }
                 }
               } catch {
                 // fallback below
               }
-              const accounts = accountsQuery.data?.accounts || [];
-              if (accounts.length === 0) {
+              const accList = Array.isArray(accountsQuery.data) ? accountsQuery.data : (accountsQuery.data as any)?.accounts || [];
+              if (accList.length === 0) {
                 toast.error("Không có tài khoản nào để xuất.");
                 return;
               }
-              const lines = accounts.map((a: any) => a.email).filter(Boolean);
+              const lines = accList.map((a: any) => a.email).filter(Boolean);
               const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -530,20 +532,34 @@ export function AccountsGridPage() {
                 const res = await fetch("/api/accounts/export-all-json");
                 if (res.ok) {
                   const text = await res.text();
-                  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `codex_lb_accounts_backup_${new Date().toISOString().slice(0, 10)}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  toast.success("Đã xuất sao lưu JSON thành công!");
-                  return;
+                  if (text && text.trim().length > 0) {
+                    const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `codex_lb_accounts_backup_${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Đã xuất sao lưu JSON thành công!");
+                    return;
+                  }
                 }
               } catch {
                 // fallback
               }
-              window.open("/api/accounts/export-all-json", "_blank");
+              const accList = Array.isArray(accountsQuery.data) ? accountsQuery.data : (accountsQuery.data as any)?.accounts || [];
+              if (accList.length === 0) {
+                toast.error("Không có tài khoản nào để xuất.");
+                return;
+              }
+              const blob = new Blob([JSON.stringify(accList, null, 2)], { type: "application/json;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `codex_lb_accounts_backup_${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.success(`Đã xuất ${accList.length} tài khoản dạng JSON thành công!`);
             }}
             title="Xuất bản sao lưu đầy đủ tất cả tài khoản (.json)"
           >

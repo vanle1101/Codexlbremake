@@ -1103,6 +1103,48 @@ class AutoLoginService:
             "message": msg,
         }
 
+    def start_background_watchdog(self) -> None:
+        """Start a background daemon that periodically auto-recovers 401 accounts."""
+        if hasattr(self, "_watchdog_task") and self._watchdog_task and not self._watchdog_task.done():
+            return
+
+        async def _watchdog_loop():
+            from app.modules.oauth.service import OauthService
+            from app.db.session import get_background_session
+            from app.modules.accounts.repository import AccountsRepository
+
+            while True:
+                await asyncio.sleep(40)
+                try:
+                    if self._status != "running":
+                        async with get_background_session() as db_session:
+                            repo = AccountsRepository(db_session)
+                            oauth_service = OauthService(accounts_repo=repo)
+                            await self.auto_reauth_all_401(oauth_service=oauth_service, concurrency=2)
+                except Exception as e:
+                    logger.debug("Auto-reauth watchdog tick error: %s", e)
+
+        self._watchdog_task = asyncio.create_task(_watchdog_loop())
+
+    def trigger_auto_reauth_soon(self) -> None:
+        """Trigger background 401 recovery immediately."""
+        asyncio.create_task(self._safe_trigger_reauth())
+
+    async def _safe_trigger_reauth(self) -> None:
+        await asyncio.sleep(2)
+        if self._status != "running":
+            try:
+                from app.modules.oauth.service import OauthService
+                from app.db.session import get_background_session
+                from app.modules.accounts.repository import AccountsRepository
+
+                async with get_background_session() as db_session:
+                    repo = AccountsRepository(db_session)
+                    oauth_service = OauthService(accounts_repo=repo)
+                    await self.auto_reauth_all_401(oauth_service=oauth_service, concurrency=2)
+            except Exception as e:
+                logger.debug("Immediate trigger reauth error: %s", e)
+
 
 _AUTO_LOGIN_SINGLETON = AutoLoginService()
 
