@@ -529,7 +529,7 @@ class AccountsService:
         # Build auth.json payload for Codex CLI / Codex App
         payload = {
             "OPENAI_API_KEY": None,
-            "last_refresh": auth_data.codex_auth_json.last_refresh,
+            "last_refresh": datetime.now(timezone.utc).isoformat(),
             "tokens": {
                 "access_token": auth_data.codex_auth_json.tokens.access_token,
                 "account_id": auth_data.codex_auth_json.tokens.account_id,
