@@ -936,12 +936,25 @@ export function AccountsGridPage() {
         <Suspense fallback={null}>
           <OauthDialog
             open={oauthDialog.open}
-            onOpenChange={oauthDialog.onOpenChange}
-            accountId={oauthAccountId}
-            startFlow={oauth.startFlow}
-            checkStatus={oauth.checkStatus}
-            completeFlow={oauth.completeFlow}
-            manualCallback={oauth.manualCallback}
+            state={oauth.state}
+            onOpenChange={(open) => {
+              oauthDialog.onOpenChange(open);
+              if (!open) {
+                setOauthAccountId(null);
+              }
+            }}
+            onStart={async (method) => {
+              await oauth.start(method, oauthAccountId ?? undefined);
+            }}
+            onManualCallback={async (url) => {
+              await oauth.manualCallback(url);
+            }}
+            onComplete={async () => {
+              await oauth.complete();
+            }}
+            onReset={() => {
+              oauth.reset();
+            }}
           />
         </Suspense>
       ) : null}
