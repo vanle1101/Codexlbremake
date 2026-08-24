@@ -396,7 +396,7 @@ class AutoLoginService:
             async def _do_web_session_fallback() -> bool:
                 self._log(f"[Luồng {worker_id}] ⚠️ Đang tự động chuyển sang Web Session login cho {acc.email}...")
                 try:
-                    await page.goto("https://chatgpt.com/auth/login", wait_until="domcontentloaded", timeout=30000)
+                    await page.goto("https://chatgpt.com", wait_until="domcontentloaded", timeout=30000)
                     await asyncio.sleep(1.5)
 
                     # Check for Cloudflare Challenge
@@ -405,39 +405,53 @@ class AutoLoginService:
                     except Exception:
                         pass
 
-                    # Check if there is a "Log in" button before email field
+                    login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in")').filter(has_text="Log in")
                     email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
-                    if not await email_inp_web.is_visible():
-                        login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in"), [data-testid="login-button"]').first
+                    
+                    for _ in range(8):
+                        if await email_inp_web.is_visible():
+                            break
                         try:
-                            if await login_btn.is_visible():
-                                await login_btn.click(timeout=2000)
-                                await asyncio.sleep(1.5)
-                        except Exception:
+                            btn = page.locator('[data-testid="login-button"]').first
+                            try:
+                                await btn.click(timeout=2000, force=True)
+                                self._log(f"[Luồng {worker_id}] Clicked Log in button (testid) (force)")
+                                await asyncio.sleep(2)
+                                break
+                            except Exception:
+                                pass
+                        except Exception as e:
+                            self._log(f"Login click err: {e}")
                             pass
+                        await asyncio.sleep(1)
 
-                    for _ in range(12):
+                    self._log(f"[Luồng {worker_id}] Web Session: Waiting for email input...")
+                    for _ in range(15):
                         try:
                             await _solve_turnstile(page)
                         except Exception:
                             pass
                         if await email_inp_web.is_visible():
                             break
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(1.5)
 
                     if await email_inp_web.is_visible():
+                        self._log(f"[Luồng {worker_id}] Web Session: Điền email {acc.email}...")
                         await _fill_input_safely(page, email_inp_web, acc.email)
                         await _solve_turnstile(page)
-                        submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        submit_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
                         if await submit_btn.is_visible():
                             await submit_btn.click()
                         else:
                             await page.keyboard.press("Enter")
                         await asyncio.sleep(1.5)
+                    else:
+                        self._log(f"[Luồng {worker_id}] Web Session: Timeout waiting for email input!")
 
                     # Wait for password input & resolve Turnstile
                     pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]:not([aria-hidden="true"])').first
                     pass_found = False
+                    self._log(f"[Luồng {worker_id}] Web Session: Waiting for password input...")
                     for _ in range(15):
                         try:
                             await _solve_turnstile(page)
@@ -447,7 +461,7 @@ class AutoLoginService:
                             pass_found = True
                             break
                         # If still stuck on email step, re-submit
-                        btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
                         if await btn.is_visible() and await email_inp_web.is_visible():
                             try:
                                 await btn.click(timeout=1500)
@@ -456,14 +470,17 @@ class AutoLoginService:
                         await asyncio.sleep(1)
 
                     if pass_found:
+                        self._log(f"[Luồng {worker_id}] Web Session: Điền mật khẩu cho {acc.email}...")
                         await _fill_input_safely(page, pass_inp_web, acc.password)
                         await _solve_turnstile(page)
-                        submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        submit_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
                         if await submit_btn.is_visible():
                             await submit_btn.click()
                         else:
                             await page.keyboard.press("Enter")
                         await asyncio.sleep(2)
+                    else:
+                        self._log(f"[Luồng {worker_id}] Web Session: Timeout waiting for password input!")
 
                     # Wait for OTP or landing
                     otp_inp_web = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
@@ -568,7 +585,7 @@ class AutoLoginService:
             await _fill_input_safely(page, email_input, acc.email)
             await _solve_turnstile(page)
 
-            continue_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+            continue_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
             try:
                 if await continue_btn.is_visible():
                     await continue_btn.click()
@@ -615,7 +632,7 @@ class AutoLoginService:
                 # If still stuck on email input after 3s, re-click submit
                 if retry_i in (2, 5, 9, 13):
                     try:
-                        btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
                         if await btn.is_visible():
                             await btn.click(timeout=1500)
                     except Exception:
@@ -636,7 +653,7 @@ class AutoLoginService:
             await _fill_input_safely(page, pass_input, acc.password)
             await _solve_turnstile(page)
 
-            submit_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+            submit_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
             try:
                 if await submit_btn.is_visible():
                     await submit_btn.click()
@@ -670,7 +687,7 @@ class AutoLoginService:
                         self._log(f"[Luồng {worker_id}] ⚠️ Trang quay lại ô Email, đang tự động nạp lại & xác minh...")
                         await _fill_input_safely(page, em_el, acc.email)
                         await _solve_turnstile(page)
-                        c_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        c_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
                         if await c_btn.is_visible():
                             await c_btn.click()
                         else:
@@ -679,7 +696,7 @@ class AutoLoginService:
                         if await pw_el.is_visible():
                             await _fill_input_safely(page, pw_el, acc.password)
                             await _solve_turnstile(page)
-                            s_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
+                            s_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
                             if await s_btn.is_visible():
                                 await s_btn.click()
                             else:
@@ -1062,7 +1079,7 @@ class AutoLoginService:
 
         async with get_background_session() as db_session:
             stmt = select(Account.id, Account.email).where(
-                Account.status == AccountStatus.REAUTH_REQUIRED
+                Account.status.in_([AccountStatus.REAUTH_REQUIRED, AccountStatus.DEACTIVATED])
             )
             result = await db_session.execute(stmt)
             accounts_401_data = [(str(row[0]), str(row[1])) for row in result.all()]
