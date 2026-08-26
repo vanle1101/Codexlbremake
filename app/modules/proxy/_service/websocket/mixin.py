@@ -2838,7 +2838,7 @@ class _WebSocketMixin:
                         api_key=api_key,
                         response_create_gate=response_create_gate,
                         status="cancelled",
-                        penalize_account=False,
+                        penalize_account=True,
                     )
                 client_disconnected = downstream_activity.disconnected
                 cleanup_phase = "pending_requests"
@@ -3509,10 +3509,9 @@ class _WebSocketMixin:
                 # starts, a connection/open failure belongs to the replacement.
                 _clear_websocket_precreated_replay_fallback(request_state)
 
-            if (
-                request_state.previous_response_id is not None
-                and request_state.preferred_account_id is not None
-                and request_state.preferred_account_id != account.id
+            if request_state.previous_response_id is not None and (
+                request_state.preferred_account_id is None
+                or request_state.preferred_account_id != account.id
             ):
                 _facade().logger.warning(
                     "websocket_account_changed_stripping_previous_response_id request_id=%s known_owner=%s new_account_id=%s",
