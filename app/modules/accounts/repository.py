@@ -1392,6 +1392,10 @@ class AccountsRepository:
         return matches[0]
 
     async def _account_by_slot_identity(self, account: Account) -> Account | None:
+        workspace_key = _workspace_slot_key(account)
+        if not workspace_key:
+            return None
+
         # 1. Match by email (case-insensitive) and workspace slot
         if account.email and account.email != "unknown@example.com":
             stmt = select(Account).where(func.lower(Account.email) == account.email.lower())
@@ -1399,29 +1403,18 @@ class AccountsRepository:
                 stmt = stmt.where(Account.workspace_id == account.workspace_id)
             elif account.workspace_label:
                 stmt = stmt.where(Account.workspace_label == account.workspace_label)
-            else:
-                stmt = stmt.where(Account.workspace_id.is_(None))
             result = await self._session.execute(stmt.order_by(Account.created_at.asc()).limit(1))
             if matched := result.scalar_one_or_none():
                 return matched
 
-        # 2. Match by chatgpt_account_id
+        # 2. Match by chatgpt_account_id and workspace slot
         if account.chatgpt_account_id:
             stmt = select(Account).where(Account.chatgpt_account_id == account.chatgpt_account_id)
             if account.workspace_id:
                 stmt = stmt.where(Account.workspace_id == account.workspace_id)
             elif account.workspace_label:
                 stmt = stmt.where(Account.workspace_label == account.workspace_label)
-            else:
-                stmt = stmt.where(Account.workspace_id.is_(None))
             result = await self._session.execute(stmt.order_by(Account.created_at.asc()).limit(1))
-            if matched := result.scalar_one_or_none():
-                return matched
-
-        # 3. Match by account ID directly
-        if account.id:
-            stmt = select(Account).where(Account.id == account.id).limit(1)
-            result = await self._session.execute(stmt)
             if matched := result.scalar_one_or_none():
                 return matched
 

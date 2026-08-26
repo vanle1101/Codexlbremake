@@ -2,6 +2,10 @@ import {
   AlertTriangle,
   Bot,
   CheckSquare,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
   Download,
   Filter,
@@ -58,6 +62,7 @@ import type {
 } from "@/features/accounts/schemas";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import { useDialogState } from "@/hooks/use-dialog-state";
+import { useThemeStore } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { normalizeStatus } from "@/utils/account-status";
 import { getErrorMessageOrNull } from "@/utils/errors";
@@ -99,12 +104,15 @@ export function AccountsGridPage() {
   const { data: codexActive } = useCodexActiveAccount();
   const codexSubagents = useCodexSubagents();
   const canWrite = useAuthStore((state) => state.canWrite);
+  const theme = useThemeStore((state) => state.theme);
 
   // Filter & Search states
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("quota_desc");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(0);
 
   // Selection states for bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -178,8 +186,24 @@ export function AccountsGridPage() {
       list = list.filter((a) => (a.planType || "").toLowerCase() === planFilter);
     }
 
-    // Sorting
+    const getStatusRank = (acc: AccountSummary): number => {
+      const s = normalizeStatus(acc.status);
+      if (s === "active") return 1;
+      if (s === "exceeded" || s === "limited") return 2;
+      if (s === "paused") return 3;
+      if (s === "reauth" || acc.status === "reauth_required" || s === "error") return 4;
+      if (s === "deactivated" || acc.status === "deactivated") return 5;
+      return 3;
+    };
+
+    // Sorting: always put active accounts on top first, then sort by selected option
     list.sort((a, b) => {
+      const rankA = getStatusRank(a);
+      const rankB = getStatusRank(b);
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
       if (sortOption === "quota_desc") {
         const qA = a.usage?.secondaryRemainingPercent ?? a.usage?.primaryRemainingPercent ?? 0;
         const qB = b.usage?.secondaryRemainingPercent ?? b.usage?.primaryRemainingPercent ?? 0;
@@ -208,6 +232,17 @@ export function AccountsGridPage() {
 
     return list;
   }, [rawAccounts, search, statusFilter, planFilter, sortOption]);
+
+  // Reset pagination to page 0 whenever filter/search/sort changes
+  useEffect(() => {
+    setPage(0);
+  }, [search, statusFilter, planFilter, sortOption]);
+
+  const totalPages = pageSize > 0 ? Math.max(1, Math.ceil(accounts.length / pageSize)) : 1;
+  const paginatedAccounts = useMemo(() => {
+    if (pageSize <= 0) return accounts;
+    return accounts.slice(page * pageSize, (page + 1) * pageSize);
+  }, [accounts, page, pageSize]);
 
   // Multi-select handlers
   const handleToggleSelect = useCallback((accountId: string, checked: boolean) => {
@@ -626,7 +661,7 @@ export function AccountsGridPage() {
         <div
           onClick={() => setStatusFilter("all")}
           className={cn(
-            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-primary/50",
+            "rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-sm cursor-pointer transition-colors hover:border-primary/50",
             statusFilter === "all" && "border-primary ring-1 ring-primary/20",
           )}
         >
@@ -636,7 +671,7 @@ export function AccountsGridPage() {
         <div
           onClick={() => setStatusFilter("active")}
           className={cn(
-            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-emerald-500/50",
+            "rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-sm cursor-pointer transition-colors hover:border-emerald-500/50",
             statusFilter === "active" && "border-emerald-500 ring-1 ring-emerald-500/20",
           )}
         >
@@ -646,7 +681,7 @@ export function AccountsGridPage() {
         <div
           onClick={() => setStatusFilter("exceeded")}
           className={cn(
-            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-amber-500/50",
+            "rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-sm cursor-pointer transition-colors hover:border-amber-500/50",
             statusFilter === "exceeded" && "border-amber-500 ring-1 ring-amber-500/20",
           )}
         >
@@ -656,7 +691,7 @@ export function AccountsGridPage() {
         <div
           onClick={() => setStatusFilter("paused")}
           className={cn(
-            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors hover:border-muted-foreground/50",
+            "rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-sm cursor-pointer transition-colors hover:border-muted-foreground/50",
             statusFilter === "paused" && "border-muted-foreground ring-1 ring-muted-foreground/20",
           )}
         >
@@ -666,7 +701,7 @@ export function AccountsGridPage() {
         <div
           onClick={() => setStatusFilter(statusFilter === "401" ? "all" : "401")}
           className={cn(
-            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors relative overflow-hidden",
+            "rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-sm cursor-pointer transition-colors relative overflow-hidden",
             statusFilter === "401" ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5" : "hover:border-red-500/50",
           )}
         >
@@ -695,7 +730,7 @@ export function AccountsGridPage() {
         <div
           onClick={() => setStatusFilter(statusFilter === "deactivated" ? "all" : "deactivated")}
           className={cn(
-            "rounded-xl border bg-card p-3 shadow-sm cursor-pointer transition-colors relative overflow-hidden",
+            "rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-sm cursor-pointer transition-colors relative overflow-hidden",
             statusFilter === "deactivated" ? "border-rose-500 ring-2 ring-rose-500/20 bg-rose-500/5" : "hover:border-rose-500/50",
           )}
         >
@@ -724,7 +759,7 @@ export function AccountsGridPage() {
       </div>
 
       {/* 3. Filter & Search Toolbar */}
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-white dark:bg-zinc-900 p-4 shadow-sm md:flex-row md:items-center md:justify-between">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           <div className="relative min-w-[240px] flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -766,6 +801,18 @@ export function AccountsGridPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setPage(0); }}>
+            <SelectTrigger className="w-[120px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="text-xs">
+              <SelectItem value="24">24 thẻ / trang</SelectItem>
+              <SelectItem value="48">48 thẻ / trang</SelectItem>
+              <SelectItem value="96">96 thẻ / trang</SelectItem>
+              <SelectItem value="0">Tất cả ({accounts.length})</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={sortOption} onValueChange={(val) => setSortOption(val as SortOption)}>
             <SelectTrigger className="w-[170px] text-xs">
               <SelectValue placeholder={t("accounts.grid.sortPlaceholder")} />
@@ -836,9 +883,9 @@ export function AccountsGridPage() {
             <Button
               type="button"
               size="sm"
-              variant="destructive"
+              variant="outline"
               onClick={() => bulkDeleteDialog.show()}
-              className="h-8 text-xs"
+              className="h-8 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
               {t("accounts.grid.bulk.delete", { count: selectedIds.size })}
@@ -852,7 +899,7 @@ export function AccountsGridPage() {
         <AlertMessage variant="error" message={errorMessage} />
       ) : null}
 
-      {/* 5. Account Cards Grid */}
+      {/* 5. Account Cards Grid with Pagination */}
       {accountsQuery.isPending ? (
         <AccountsSkeleton />
       ) : accounts.length === 0 ? (
@@ -876,37 +923,100 @@ export function AccountsGridPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
-          {accounts.map((account) => (
-            <AccountGridCard
-              key={account.accountId}
-              account={account}
-              isSelected={selectedIds.has(account.accountId)}
-              isCodexActive={
-                !!codexActive?.email &&
-                (codexActive.email === account.email ||
-                  codexActive.accountId === account.accountId ||
-                  codexActive.account_id === account.accountId)
-              }
-              isSwitching={switchingAccountId === account.accountId}
-              isSwitchingAny={isSwitchingAny}
-              isAutoReauthing={autoReauthMutation.isPending && autoReauthMutation.variables === account.accountId}
-              onAutoReauth={() => void handleAutoReauth(account)}
-              onToggleSelect={handleToggleSelect}
-              busy={mutationBusy}
-              readOnly={!canWrite}
-              onSwitchToCodex={(id) => void switchToCodexMutation.mutateAsync(id)}
-              onPause={(id) => void pauseMutation.mutateAsync(id)}
-              onResume={(id) => void resumeMutation.mutateAsync(id)}
-              onProbe={(id) => void probeMutation.mutateAsync({ accountId: id })}
-              onDelete={(id) => deleteDialog.show(id)}
-              onReauth={handleReauth}
-              onExportAuth={handleExportAuth}
-              onResetCredit={handleResetCredit}
-              onRoutingPolicyChange={handleRoutingPolicyChange}
-              onSetAlias={handleSetAlias}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+            {paginatedAccounts.map((account) => (
+              <AccountGridCard
+                key={account.accountId}
+                account={account}
+                isSelected={selectedIds.has(account.accountId)}
+                isCodexActive={
+                  !!codexActive?.email &&
+                  (codexActive.email === account.email ||
+                    codexActive.accountId === account.accountId ||
+                    codexActive.account_id === account.accountId)
+                }
+                isSwitching={switchingAccountId === account.accountId}
+                isSwitchingAny={isSwitchingAny}
+                isAutoReauthing={autoReauthMutation.isPending && autoReauthMutation.variables === account.accountId}
+                onAutoReauth={() => void handleAutoReauth(account)}
+                onToggleSelect={handleToggleSelect}
+                busy={mutationBusy}
+                readOnly={!canWrite}
+                onSwitchToCodex={(id) => void switchToCodexMutation.mutateAsync(id)}
+                onPause={(id) => void pauseMutation.mutateAsync(id)}
+                onResume={(id) => void resumeMutation.mutateAsync(id)}
+                onProbe={(id) => void probeMutation.mutateAsync({ accountId: id })}
+                onDelete={(id) => deleteDialog.show(id)}
+                onReauth={handleReauth}
+                onExportAuth={handleExportAuth}
+                onResetCredit={handleResetCredit}
+                onRoutingPolicyChange={handleRoutingPolicyChange}
+                onSetAlias={handleSetAlias}
+              />
+            ))}
+          </div>
+
+          {/* Pagination Footer */}
+          {pageSize > 0 && accounts.length > pageSize && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white dark:bg-zinc-900 p-3 shadow-xs">
+              <div className="text-xs text-muted-foreground">
+                Hiển thị <span className="font-semibold text-foreground">{page * pageSize + 1}</span> - <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, accounts.length)}</span> trên <span className="font-semibold text-foreground">{accounts.length}</span> tài khoản
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={page <= 0}
+                  onClick={() => setPage(0)}
+                  title="Trang đầu"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={page <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  title="Trang trước"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <span className="px-2 text-xs font-medium text-foreground">
+                  Trang {page + 1} / {totalPages}
+                </span>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  title="Trang sau"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage(totalPages - 1)}
+                  title="Trang cuối"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -778,20 +778,24 @@ class UsageUpdater:
         if (status == AccountStatus.REAUTH_REQUIRED or exc.status_code == 401) and account.email:
             try:
                 from app.modules.accounts.auto_login import get_auto_login_service
+
                 auto_login = get_auto_login_service()
                 if auto_login.has_credential(account.email):
-                    logger.info("Auto-recovery: Found credentials in Vault for %s. Triggering automatic background re-login...", account.email)
+                    logger.info(
+                        "Auto-recovery: Found credentials in Vault for %s. Triggering automatic background re-login...",
+                        account.email,
+                    )
                     asyncio.create_task(self._auto_recover_reauth_account(account.email))
             except Exception as auto_err:
                 logger.warning("Failed to trigger auto-recovery for %s: %s", account.email, auto_err)
 
     async def _auto_recover_reauth_account(self, email: str) -> None:
         try:
-            from app.modules.accounts.auto_login import get_auto_login_service
-            from app.modules.oauth.service import OAuthService
-            from app.modules.oauth.repository import OAuthRepository
-            from app.modules.accounts.repository import AccountsRepository
             from app.db.session import get_background_session
+            from app.modules.accounts.auto_login import get_auto_login_service
+            from app.modules.accounts.repository import AccountsRepository
+            from app.modules.oauth.repository import OAuthRepository
+            from app.modules.oauth.service import OAuthService
 
             auto_login = get_auto_login_service()
             async with get_background_session() as session:

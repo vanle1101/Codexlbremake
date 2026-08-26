@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -26,9 +25,7 @@ async def test_auto_login_service_lifecycle() -> None:
             callback_url="http://localhost:1455/auth/callback",
         )
     )
-    mock_oauth_service.oauth_status = AsyncMock(
-        return_value=MagicMock(status="success")
-    )
+    mock_oauth_service.oauth_status = AsyncMock(return_value=MagicMock(status="success"))
 
     accounts = [
         AutoLoginAccountItem(
@@ -52,11 +49,20 @@ async def test_auto_login_service_lifecycle() -> None:
         mock_element.wait_for = AsyncMock()
         mock_element.fill = AsyncMock()
         mock_element.click = AsyncMock()
-        mock_element.is_visible = AsyncMock(return_value=False)
+        mock_element.is_visible = AsyncMock(return_value=True)
+        mock_element.inner_text = AsyncMock(return_value="")
+        mock_element.scroll_into_view_if_needed = AsyncMock()
+        mock_element.evaluate = AsyncMock()
         mock_locator.first = mock_element
+        mock_locator.count = AsyncMock(return_value=0)
+        mock_locator.inner_text = AsyncMock(return_value="")
         mock_page.locator.return_value = mock_locator
+        mock_page.keyboard = MagicMock()
+        mock_page.keyboard.press = AsyncMock()
+        mock_page.frames = []
 
         mock_context.new_page = AsyncMock(return_value=mock_page)
+        mock_context.add_init_script = AsyncMock()
         mock_context.close = AsyncMock()
         mock_browser.new_context = AsyncMock(return_value=mock_context)
         mock_browser.close = AsyncMock()

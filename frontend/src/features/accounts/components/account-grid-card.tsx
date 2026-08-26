@@ -22,7 +22,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -79,7 +79,7 @@ export type AccountGridCardProps = {
   onSetAlias: (account: AccountSummary) => void;
 };
 
-export function AccountGridCard({
+function AccountGridCardComponent({
   account,
   isSelected,
   onToggleSelect,
@@ -183,10 +183,10 @@ export function AccountGridCard({
   return (
     <div
       className={cn(
-        "group relative flex flex-col justify-between rounded-xl border bg-card p-4 text-card-foreground shadow-sm transition-all duration-200 hover:shadow-md",
+        "group relative flex flex-col justify-between rounded-xl border border-border bg-white dark:bg-zinc-900 p-4 text-foreground shadow-sm transition-all duration-200 hover:shadow-md",
         isSelected && "border-primary/60 ring-2 ring-primary/20",
-        isCodexActive && "ring-2 ring-emerald-500/50 border-emerald-500/60 bg-emerald-500/[0.02]",
-        is401 && "border-red-500/40 bg-red-500/[0.02]",
+        isCodexActive && "ring-2 ring-emerald-500/50 border-emerald-500/60 bg-emerald-500/[0.04] dark:bg-emerald-500/10",
+        is401 && "border-red-500/40 bg-red-500/[0.04] dark:bg-red-500/10",
         isPaused && "opacity-75 border-dashed",
       )}
     >
@@ -596,3 +596,5 @@ export function AccountGridCard({
     </div>
   );
 }
+
+export const AccountGridCard = AccountGridCardComponent;

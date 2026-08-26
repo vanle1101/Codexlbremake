@@ -22,13 +22,20 @@ from app.core.middleware.multipart_content_encoding import raise_for_unsupported
 from app.core.multipart import ACCOUNT_IMPORT_MULTIPART_POLICY, bounded_multipart_form, read_bounded_upload
 from app.core.multipart_fields import required_upload
 from app.core.upstream_proxy import UpstreamProxyRouteError
-from app.dependencies import AccountsContext, OauthContext, get_accounts_context, get_oauth_context, get_proxy_service_for_app
+from app.dependencies import (
+    AccountsContext,
+    OauthContext,
+    get_accounts_context,
+    get_oauth_context,
+    get_proxy_service_for_app,
+)
 from app.modules.accounts.auto_login import get_auto_login_service
 from app.modules.accounts.repository import AccountIdentityConflictError
 from app.modules.accounts.schemas import (
     AccountAliasRequest,
     AccountAliasResponse,
     AccountAuthExportResponse,
+    AccountAutoReauthResponse,
     AccountDeleteResponse,
     AccountExportResponse,
     AccountImportResponse,
@@ -41,6 +48,7 @@ from app.modules.accounts.schemas import (
     AccountReactivateResponse,
     AccountRoutingPolicyUpdateRequest,
     AccountRoutingPolicyUpdateResponse,
+    AccountSaveCredentialsRequest,
     AccountsResponse,
     AccountTrendsResponse,
     AccountUpdateRequest,
@@ -48,8 +56,6 @@ from app.modules.accounts.schemas import (
     AccountUsageResetConsumeRequest,
     AccountUsageResetConsumeResponse,
     AccountUsageResetCreditsResponse,
-    AccountAutoReauthResponse,
-    AccountSaveCredentialsRequest,
     AutoLoginStartRequest,
     AutoLoginStateResponse,
     CodexActiveAccountResponse,
@@ -336,6 +342,7 @@ async def export_all_accounts_txt(
     context: AccountsContext = Depends(get_accounts_context),
 ):
     from fastapi.responses import PlainTextResponse
+
     content = await context.service.export_all_bulk_txt()
     AuditService.log_async(
         "all_accounts_txt_exported",
@@ -405,7 +412,7 @@ def launch_codex_cli():
     # Launch official ChatGPT Windows App
     try:
         subprocess.Popen(
-            'explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+            "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
             shell=True,
         )
     except Exception:
@@ -428,6 +435,7 @@ def launch_codex_cli():
 @router.get("/codex-auto-rotate/status")
 def get_codex_auto_rotate_status():
     from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
+
     switcher = get_codex_auto_switcher()
     return {
         "enabled": switcher.enabled,
@@ -440,6 +448,7 @@ def get_codex_auto_rotate_status():
 @router.post("/codex-auto-rotate/check")
 async def trigger_codex_auto_rotate_check():
     from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
+
     switcher = get_codex_auto_switcher()
     res = await switcher.check_and_auto_rotate()
     return {"status": "ok", "rotated": bool(res), "detail": res}
@@ -448,12 +457,14 @@ async def trigger_codex_auto_rotate_check():
 @router.get("/codex-subagents", response_model=CodexSubagentsStateResponse)
 def get_codex_subagents_state() -> CodexSubagentsStateResponse:
     from pathlib import Path
+
     config_path = Path.home() / ".codex" / "config.toml"
     if not config_path.exists():
         return CodexSubagentsStateResponse(enabled=False)
     try:
         content = config_path.read_text(encoding="utf-8")
         import tomllib
+
         data = tomllib.loads(content)
         enabled = data.get("features", {}).get("multi_agent", False)
         return CodexSubagentsStateResponse(enabled=bool(enabled))
@@ -466,15 +477,16 @@ def get_codex_subagents_state() -> CodexSubagentsStateResponse:
 def toggle_codex_subagents(payload: CodexSubagentsToggleRequest) -> CodexSubagentsStateResponse:
     import re
     from pathlib import Path
+
     config_path = Path.home() / ".codex" / "config.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     target_state = payload.enabled
     try:
         content = ""
         if config_path.exists():
             content = config_path.read_text(encoding="utf-8")
-        
+
         if "[features]" in content:
             if re.search(r"multi_agent\s*=\s*(true|false)", content, re.IGNORECASE):
                 new_content = re.sub(
@@ -484,13 +496,15 @@ def toggle_codex_subagents(payload: CodexSubagentsToggleRequest) -> CodexSubagen
                     flags=re.IGNORECASE,
                 )
             else:
-                new_content = content.replace("[features]", f"[features]\nmulti_agent = {'true' if target_state else 'false'}")
+                new_content = content.replace(
+                    "[features]", f"[features]\nmulti_agent = {'true' if target_state else 'false'}"
+                )
         else:
             new_content = f"""model = "gpt-5.6-luna"
 model_provider = "openai-custom"
 
 [features]
-multi_agent = {'true' if target_state else 'false'}
+multi_agent = {"true" if target_state else "false"}
 
 [model_providers.openai-custom]
 name = "OpenAI Custom (Codex-LB)"
@@ -521,11 +535,10 @@ async def import_account(
         ACCOUNT_IMPORT_MULTIPART_POLICY,
         typed_upload_fields=("auth_json", "file"),
     ) as form:
-        upload_item = form.get("auth_json") or form.get("file")
-        if upload_item is None:
-            upload_item = required_upload(form, "auth_json")
+        upload_field = "file" if "file" in form else "auth_json"
+        upload = required_upload(form, upload_field)
         raw = await read_bounded_upload(
-            upload_item,
+            upload,
             max_bytes=ACCOUNT_IMPORT_MULTIPART_POLICY.max_file_bytes,
             param="auth_json",
         )

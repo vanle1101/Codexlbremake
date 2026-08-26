@@ -156,7 +156,7 @@ def resolve_seat_identity(claims: "IdTokenClaims", auth_claims: "OpenAIAuthClaim
 
 def parse_auth_json(raw: bytes) -> AuthFile:
     data = json.loads(raw)
-    
+
     # Hỗ trợ nạp trực tiếp file JSON lấy từ https://chatgpt.com/api/auth/session
     if isinstance(data, dict) and ("accessToken" in data or "user" in data):
         access_token = data.get("accessToken") or data.get("access_token") or ""

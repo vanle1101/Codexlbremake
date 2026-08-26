@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.db.models import Account, AccountStatus, UsageHistory
-from app.db.session import get_background_session, detach_session_objects
+from app.db.session import detach_session_objects, get_background_session
 from app.modules.accounts.repository import AccountsRepository
 from app.modules.accounts.service import AccountsService
 from app.modules.usage.repository import UsageRepository
@@ -64,9 +64,12 @@ class CodexDesktopAutoSwitcher:
                     parts = id_token.split(".")
                     if len(parts) >= 2:
                         import base64
+
                         padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
                         claims = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
-                        active_email = claims.get("email") or (claims.get("https://api.openai.com/profile") or {}).get("email")
+                        active_email = claims.get("email") or (claims.get("https://api.openai.com/profile") or {}).get(
+                            "email"
+                        )
             except Exception:
                 pass
 
@@ -91,10 +94,19 @@ class CodexDesktopAutoSwitcher:
 
                 # 2. Kiểm tra mức sử dụng hiện tại
                 latest_usage: UsageHistory | None = await usage_repo.latest_entry_for_account(active_account.id)
-                used_percent = float(latest_usage.used_percent) if latest_usage and latest_usage.used_percent is not None else 0.0
+                used_percent = (
+                    float(latest_usage.used_percent) if latest_usage and latest_usage.used_percent is not None else 0.0
+                )
 
                 is_exhausted = (
-                    active_account.status in (AccountStatus.QUOTA_EXCEEDED, AccountStatus.RATE_LIMITED, AccountStatus.DEACTIVATED, AccountStatus.REAUTH_REQUIRED, AccountStatus.PAUSED)
+                    active_account.status
+                    in (
+                        AccountStatus.QUOTA_EXCEEDED,
+                        AccountStatus.RATE_LIMITED,
+                        AccountStatus.DEACTIVATED,
+                        AccountStatus.REAUTH_REQUIRED,
+                        AccountStatus.PAUSED,
+                    )
                     or used_percent >= self.threshold_percent
                 )
 
@@ -109,10 +121,9 @@ class CodexDesktopAutoSwitcher:
                 # 3. Tìm các tài khoản ACTIVE còn nhiều hạn mức nhất
                 all_accounts = await accounts_repo.list_accounts()
                 candidates = [
-                    a for a in all_accounts
-                    if a.id != active_account.id
-                    and a.status == AccountStatus.ACTIVE
-                    and a.tokens_enc
+                    a
+                    for a in all_accounts
+                    if a.id != active_account.id and a.status == AccountStatus.ACTIVE and a.tokens_enc
                 ]
 
                 if not candidates:

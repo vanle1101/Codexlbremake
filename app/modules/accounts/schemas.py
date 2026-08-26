@@ -401,4 +401,3 @@ class CodexSubagentsStateResponse(DashboardModel):
 
 class CodexSubagentsToggleRequest(DashboardModel):
     enabled: bool
-

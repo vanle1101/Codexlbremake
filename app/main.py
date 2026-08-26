@@ -510,8 +510,10 @@ async def lifespan(app: FastAPI):
     await data_retention_scheduler.start()
     await telemetry_scheduler.start()
     from app.modules.accounts.codex_auto_switcher import get_codex_auto_switcher
+
     get_codex_auto_switcher().start()
     from app.modules.accounts.auto_login import get_auto_login_service
+
     get_auto_login_service().start_background_watchdog()
     if settings.metrics_enabled and PROMETHEUS_AVAILABLE:
         import uvicorn

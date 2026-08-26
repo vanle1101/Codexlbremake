@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: "Geist Sans";
   font-style: normal;
@@ -10,10 +12,6 @@
   src: url("/fonts/GeistSans-Variable.woff2") format("woff2");
 }
 
-/* Self-hosted like Geist Sans above: the previous Google Fonts stylesheet
-   was render-blocking and stalled first paint entirely on air-gapped
-   deployments. JetBrains Mono is variable; 400/500 come from one file per
-   subset. */
 @font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
@@ -33,8 +31,6 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
-
-@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);

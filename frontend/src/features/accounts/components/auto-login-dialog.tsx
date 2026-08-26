@@ -438,149 +438,154 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl lg:max-w-6xl w-[96vw] max-h-[92vh] overflow-y-auto p-4 sm:p-6">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+      <DialogContent className="sm:max-w-4xl lg:max-w-5xl w-[94vw] max-h-[85vh] flex flex-col p-4 sm:p-5 overflow-hidden gap-3">
+        <DialogHeader className="shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary shrink-0">
               <Bot className="h-4 w-4" />
             </span>
-            <div>
-              <DialogTitle>{t("accounts.autoLoginDialog.title")}</DialogTitle>
-              <DialogDescription>
+            <div className="min-w-0 text-left">
+              <DialogTitle className="text-base sm:text-lg font-bold">{t("accounts.autoLoginDialog.title")}</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground truncate">
                 Hệ thống sử dụng Playwright chạy ngầm hoàn toàn (Headless) để tự động đăng nhập và nạp tài khoản vào Codex-LB.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {/* Input Textarea Section */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <label htmlFor="auto-login-input" className="font-medium">
-              {t("accounts.autoLoginDialog.accountsLabel")}
-            </label>
-            <div className="flex items-center gap-1.5">
-              {duplicateCount > 0 ? (
-                <span className="rounded bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[11px] font-mono text-amber-600 dark:text-amber-400">
-                  Đã lọc {duplicateCount} acc trùng
+        {/* Scrollable Modal Content */}
+        <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-w-0 flex flex-col">
+          {/* Input Textarea Section */}
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center justify-between text-xs">
+              <label htmlFor="auto-login-input" className="font-semibold text-foreground">
+                {t("accounts.autoLoginDialog.accountsLabel")}
+              </label>
+              <div className="flex items-center gap-2">
+                {duplicateCount > 0 ? (
+                  <span className="rounded bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[11px] font-mono text-amber-600 dark:text-amber-400">
+                    Đã lọc {duplicateCount} acc trùng
+                  </span>
+                ) : null}
+                <span className="rounded bg-muted border px-2 py-0.5 text-[11px] font-mono text-muted-foreground font-semibold">
+                  {t("accounts.autoLoginDialog.parseCount", {
+                    count: parsedAccounts.length,
+                    defaultValue: `${parsedAccounts.length} tài khoản hợp lệ`,
+                  })}
                 </span>
-              ) : null}
-              <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
-                {t("accounts.autoLoginDialog.parseCount", {
-                  count: parsedAccounts.length,
-                  defaultValue: `${parsedAccounts.length} tài khoản hợp lệ`,
-                })}
-              </span>
+              </div>
             </div>
-          </div>
 
-          <textarea
-            id="auto-login-input"
-            rows={7}
-            value={accountsText}
-            onChange={(e) => {
-              setAccountsText(e.target.value);
-              localStorage.setItem("codex_auto_login_input_text", e.target.value);
-            }}
-            placeholder={
-              isRunning
-                ? "💡 Tiến trình đang chạy... Bạn có thể dán thêm danh sách tài khoản mới vào đây rồi bấm nút [+ Nối acc] ở dưới để nối tiếp vào hàng đợi!"
-                : t("accounts.autoLoginDialog.accountsPlaceholder")
-            }
-            className={cn(
-              "w-full min-h-[130px] rounded-lg border bg-muted/20 p-3 font-mono text-xs outline-none transition-colors",
-              "focus:border-ring focus:ring-1 focus:ring-ring",
-            )}
-          />
-          <p className="text-[11px] text-muted-foreground">{t("accounts.autoLoginDialog.hint")}</p>
-        </div>
+            <textarea
+              id="auto-login-input"
+              rows={3}
+              value={accountsText}
+              onChange={(e) => {
+                setAccountsText(e.target.value);
+                localStorage.setItem("codex_auto_login_input_text", e.target.value);
+              }}
+              placeholder={
+                isRunning
+                  ? "💡 Tiến trình đang chạy... Dán thêm danh sách tài khoản mới vào đây rồi bấm nút [+ Nối acc] để nối vào hàng đợi!"
+                  : t("accounts.autoLoginDialog.accountsPlaceholder")
+              }
+              className={cn(
+                "w-full min-h-[70px] max-h-[120px] rounded-lg border bg-muted/20 p-2.5 font-mono text-xs outline-none transition-colors break-all leading-relaxed",
+                "focus:border-ring focus:ring-1 focus:ring-ring",
+              )}
+            />
+            <p className="text-[10.5px] text-muted-foreground">{t("accounts.autoLoginDialog.hint")}</p>
+          </div>
 
           {/* Stats & Progress */}
-          <div className="space-y-3 rounded-lg border bg-muted/10 p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
-              <div className="rounded border bg-background/50 p-2 shadow-xs">
-                <span className="block text-[10px] text-muted-foreground">{t("accounts.autoLoginDialog.total")}</span>
-                <span className="font-bold text-sm">{total}</span>
+          <div className="space-y-2.5 rounded-lg border bg-muted/10 p-3 min-w-0 flex-1 flex flex-col justify-between">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs min-w-0">
+              <div className="rounded-lg border bg-background/70 p-2 shadow-xs">
+                <span className="block text-[10.5px] font-medium text-muted-foreground">{t("accounts.autoLoginDialog.total")}</span>
+                <span className="font-bold text-base text-foreground mt-0.5">{total}</span>
               </div>
-              <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-emerald-600 dark:text-emerald-400 shadow-xs">
-                <span className="block text-[10px]">{t("accounts.autoLoginDialog.success")}</span>
-                <span className="font-bold text-sm">{successCount}</span>
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400 shadow-xs">
+                <span className="block text-[10.5px] font-medium">{t("accounts.autoLoginDialog.success")}</span>
+                <span className="font-bold text-base mt-0.5">{successCount}</span>
               </div>
-              <div className="rounded border border-purple-500/30 bg-purple-500/5 p-2 text-purple-600 dark:text-purple-400 shadow-xs">
-                <span className="block text-[10px] flex items-center justify-center gap-0.5">📱 Dính SĐT</span>
-                <span className="font-bold text-sm">{phoneCount}</span>
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-2 text-purple-600 dark:text-purple-400 shadow-xs">
+                <span className="block text-[10.5px] font-medium flex items-center justify-center gap-1">📱 Dính SĐT</span>
+                <span className="font-bold text-base mt-0.5">{phoneCount}</span>
               </div>
-              <div className="rounded border border-rose-500/30 bg-rose-500/10 p-2 text-rose-600 dark:text-rose-400 shadow-xs">
-                <span className="block text-[10px] flex items-center justify-center gap-0.5">🚫 Deactivated</span>
-                <span className="font-bold text-sm">{deactivatedCount}</span>
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-rose-600 dark:text-rose-400 shadow-xs">
+                <span className="block text-[10.5px] font-medium flex items-center justify-center gap-1">🚫 Deactivated</span>
+                <span className="font-bold text-base mt-0.5">{deactivatedCount}</span>
               </div>
-              <div className="rounded border border-red-500/30 bg-red-500/5 p-2 text-red-600 dark:text-red-400 shadow-xs">
-                <span className="block text-[10px]">Lỗi khác</span>
-                <span className="font-bold text-sm">{failCount}</span>
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-red-600 dark:text-red-400 shadow-xs">
+                <span className="block text-[10.5px] font-medium">Lỗi khác</span>
+                <span className="font-bold text-base mt-0.5">{failCount}</span>
               </div>
-              <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-amber-600 dark:text-amber-400 shadow-xs">
-                <span className="block text-[10px]">{t("accounts.autoLoginDialog.pending")}</span>
-                <span className="font-bold text-sm">{pendingCount}</span>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400 shadow-xs">
+                <span className="block text-[10.5px] font-medium">{t("accounts.autoLoginDialog.pending")}</span>
+                <span className="font-bold text-base mt-0.5">{pendingCount}</span>
               </div>
             </div>
 
-          <div className="space-y-1">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
+            <div className="space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-300 rounded-full"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
+                <span>
+                  {isRunning
+                    ? `Trình duyệt đang chạy ngầm (${concurrency} luồng song song)...`
+                    : sessionState.status === "paused"
+                    ? "Đã tạm dừng"
+                    : sessionState.status === "finished"
+                    ? "Đã hoàn thành"
+                    : "Sẵn sàng"}
+                </span>
+                <span className="font-bold text-foreground">{progressPercent}%</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>
-                {isRunning
-                  ? `Trình duyệt đang chạy ngầm (${concurrency} luồng song song)...`
-                  : sessionState.status === "paused"
-                  ? "Đã tạm dừng"
-                  : sessionState.status === "finished"
-                  ? "Đã hoàn thành"
-                  : "Sẵn sàng"}
-              </span>
-              <span>{progressPercent}%</span>
-            </div>
-          </div>
 
-          {/* Live Console Logs */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-              <Terminal className="h-3.5 w-3.5" />
-              <span>Nhật ký báo cáo trực tiếp:</span>
-            </div>
-            <div className="h-36 overflow-y-auto rounded-lg border bg-zinc-950 p-2.5 font-mono text-[11px] text-zinc-100 shadow-inner">
-              {sessionState.logs.length === 0 ? (
-                <div className="text-zinc-500 italic">Chưa có nhật ký hoạt động. Bấm "Bắt đầu đăng nhập tự động" để chạy.</div>
-              ) : (
-                sessionState.logs.map((log, idx) => (
-                  <div key={idx} className="leading-relaxed">
-                    <span className="text-zinc-500 mr-2">[{log.timestamp}]</span>
-                    <span
-                      className={cn(
-                        log.level === "error" && "text-red-400 font-medium",
-                        log.level === "success" && "text-emerald-400 font-medium",
-                        log.level === "warning" && "text-amber-400",
-                        log.level === "info" && "text-zinc-300",
-                      )}
-                    >
-                      {log.message}
-                    </span>
-                  </div>
-                ))
-              )}
-              <div ref={logsEndRef} />
+            {/* Live Console Logs */}
+            <div className="space-y-1 min-w-0 flex-1 flex flex-col">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <Terminal className="h-3.5 w-3.5 text-primary" />
+                <span>Nhật ký báo cáo trực tiếp:</span>
+              </div>
+              <div className="h-44 sm:h-48 overflow-y-auto rounded-lg border bg-zinc-950 p-2.5 font-mono text-[11px] text-zinc-100 shadow-inner break-all min-w-0">
+                {sessionState.logs.length === 0 ? (
+                  <div className="text-zinc-500 italic">Chưa có nhật ký hoạt động. Bấm "Bắt đầu đăng nhập tự động" để chạy.</div>
+                ) : (
+                  sessionState.logs.map((log, idx) => (
+                    <div key={idx} className="leading-relaxed break-all whitespace-pre-wrap flex gap-1.5 py-0.5">
+                      <span className="text-zinc-500 shrink-0 select-none">[{log.timestamp}]</span>
+                      <span
+                        className={cn(
+                          "break-all",
+                          log.level === "error" && "text-red-400 font-medium",
+                          log.level === "success" && "text-emerald-400 font-medium",
+                          log.level === "warning" && "text-amber-400",
+                          log.level === "info" && "text-zinc-300",
+                        )}
+                      >
+                        {log.message}
+                      </span>
+                    </div>
+                  ))
+                )}
+                <div ref={logsEndRef} />
+              </div>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="flex flex-wrap items-center justify-between gap-2 sm:justify-between">
+        {/* Modal Footer */}
+        <DialogFooter className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t shrink-0 sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5">
-              <label htmlFor="concurrency-select" className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <Zap className="h-3.5 w-3.5" /> Luồng chạy:
+              <label htmlFor="concurrency-select" className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <Zap className="h-3.5 w-3.5" /> Luồng:
               </label>
               <select
                 id="concurrency-select"
@@ -590,18 +595,18 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                   setConcurrency(val);
                   localStorage.setItem("codex_auto_login_concurrency", String(val));
                 }}
-                className="h-7 rounded border border-emerald-500/30 bg-background px-2 text-xs font-semibold"
+                className="h-7.5 rounded-md border border-emerald-500/40 bg-background px-2 text-xs font-bold"
                 disabled={isRunning}
               >
                 <option value={1}>1 luồng</option>
                 <option value={2}>2 luồng</option>
-                <option value={3}>3 luồng (⚡ Nhanh - Khuyên dùng)</option>
+                <option value={3}>3 luồng (⚡ Khuyên dùng)</option>
                 <option value={4}>4 luồng</option>
                 <option value={5}>5 luồng</option>
                 <option value={8}>8 luồng (⚡ Cực nhanh)</option>
                 <option value={10}>10 luồng (🚀 Siêu tốc)</option>
                 <option value={15}>15 luồng (🔥 Turbo)</option>
-                <option value={20}>20 luồng (⚡ MAX Speed)</option>
+                <option value={20}>20 luồng (⚡ MAX)</option>
                 <option value={25}>25 luồng</option>
                 <option value={30}>30 luồng</option>
               </select>
@@ -609,7 +614,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
 
             <div className="flex items-center gap-1.5">
               <label htmlFor="delay-input" className="text-xs text-muted-foreground">
-                Delay (s):
+                Delay:
               </label>
               <input
                 id="delay-input"
@@ -618,9 +623,10 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 max={60}
                 value={delaySeconds}
                 onChange={(e) => setDelaySeconds(parseInt(e.target.value, 10) || 0)}
-                className="h-7 w-12 rounded border bg-muted/20 text-center font-mono text-xs"
+                className="h-7 w-10 rounded border bg-muted/20 text-center font-mono text-xs"
                 disabled={isRunning}
               />
+              <span className="text-[11px] text-muted-foreground">s</span>
             </div>
           </div>
 
@@ -631,10 +637,10 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 size="sm"
                 variant="outline"
                 onClick={handleExportSuccess}
-                className="gap-1 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 px-2.5"
+                className="gap-1 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 px-2"
               >
                 <Download className="h-3.5 w-3.5" />
-                Xuất thành công ({successCount})
+                Thành công ({successCount})
               </Button>
             ) : null}
 
@@ -644,10 +650,10 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 size="sm"
                 variant="outline"
                 onClick={handleExportPhoneRequired}
-                className="gap-1 text-xs border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/5 hover:bg-purple-500/10 px-2.5"
+                className="gap-1 text-xs border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/5 hover:bg-purple-500/10 px-2"
               >
                 <Download className="h-3.5 w-3.5" />
-                Xuất dính SĐT ({phoneCount})
+                Dính SĐT ({phoneCount})
               </Button>
             ) : null}
 
@@ -657,17 +663,17 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 size="sm"
                 variant="outline"
                 onClick={handleExportDeactivated}
-                className="gap-1 text-xs border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-2.5"
+                className="gap-1 text-xs border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-2"
               >
                 <Download className="h-3.5 w-3.5" />
-                Xuất Deactivated ({deactivatedCount})
+                Deactivated ({deactivatedCount})
               </Button>
             ) : null}
 
             {failCount > 0 ? (
-              <Button type="button" size="sm" variant="outline" onClick={handleExportFailed} className="gap-1 text-xs text-red-600 dark:text-red-400 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 px-2.5">
+              <Button type="button" size="sm" variant="outline" onClick={handleExportFailed} className="gap-1 text-xs text-red-600 dark:text-red-400 border-red-500/30 bg-red-500/5 hover:bg-red-500/10 px-2">
                 <Download className="h-3.5 w-3.5" />
-                Xuất lỗi ({failCount})
+                Lỗi ({failCount})
               </Button>
             ) : null}
 
@@ -714,7 +720,7 @@ export function AutoLoginDialog({ open, onOpenChange, onAccountAdded }: AutoLogi
                 </Button>
               </>
             ) : (
-              <Button type="button" size="sm" onClick={handleStart} disabled={submitting} className="gap-1 text-xs px-3">
+              <Button type="button" size="sm" onClick={handleStart} disabled={submitting} className="gap-1 text-xs px-3 font-semibold">
                 {submitting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 {t("accounts.autoLoginDialog.start")}
               </Button>

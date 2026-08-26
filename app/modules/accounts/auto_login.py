@@ -4,7 +4,7 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any
 
 import pyotp
 
@@ -52,15 +52,17 @@ async def _solve_turnstile(page: Any) -> bool:
         frames = page.frames if hasattr(page, "frames") and isinstance(page.frames, (list, tuple)) else []
         for frame in frames:
             frame_url = getattr(frame, "url", "")
-            if isinstance(frame_url, str) and any(k in frame_url.lower() for k in ["cloudflare", "turnstile", "challenges"]):
+            if isinstance(frame_url, str) and any(
+                k in frame_url.lower() for k in ["cloudflare", "turnstile", "challenges"]
+            ):
                 for iframe_sel in [
                     'input[type="checkbox"]',
                     'div[role="checkbox"]',
-                    'span.ctp-label',
-                    '.ctp-checkbox-label',
-                    'span.mark',
-                    '#challenge-stage',
-                    'body',
+                    "span.ctp-label",
+                    ".ctp-checkbox-label",
+                    "span.mark",
+                    "#challenge-stage",
+                    "body",
                 ]:
                     try:
                         box = frame.locator(iframe_sel).first
@@ -88,11 +90,11 @@ async def _solve_turnstile(page: Any) -> bool:
             'iframe[src*="cloudflare"]',
             '#challenge-stage input[type="checkbox"]',
             'div[role="checkbox"]',
-            'span.ctp-label',
-            '.cb-lb',
+            "span.ctp-label",
+            ".cb-lb",
             '#turnstile-wrapper input[type="checkbox"]',
             '[data-testid="turnstile-checkbox"]',
-            'div.cf-turnstile',
+            "div.cf-turnstile",
         ]
         for sel in cf_selectors:
             loc = page.locator(sel).first
@@ -299,7 +301,9 @@ class AutoLoginService:
                     self._vault[key] = a.model_copy()
 
             if added > 0:
-                self._log(f"📥 Đã nối thêm {added} tài khoản mới vào hàng đợi (Tổng cộng: {len(self._queue)} tài khoản).")
+                self._log(
+                    f"📥 Đã nối thêm {added} tài khoản mới vào hàng đợi (Tổng cộng: {len(self._queue)} tài khoản)."
+                )
             else:
                 self._log("ℹ️ Tất cả tài khoản trong danh sách nối thêm đều đã tồn tại trong hàng đợi (đã lọc trùng).")
             return self.get_state_locked()
@@ -405,9 +409,10 @@ class AutoLoginService:
                     except Exception:
                         pass
 
-                    login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in")').filter(has_text="Log in")
-                    email_inp_web = page.locator('input[name="username"], input#username, input[type="email"], input[name="email"]').first
-                    
+                    email_inp_web = page.locator(
+                        'input[name="username"], input#username, input[type="email"], input[name="email"]'
+                    ).first
+
                     for _ in range(8):
                         if await email_inp_web.is_visible():
                             break
@@ -439,7 +444,9 @@ class AutoLoginService:
                         self._log(f"[Luồng {worker_id}] Web Session: Điền email {acc.email}...")
                         await _fill_input_safely(page, email_inp_web, acc.email)
                         await _solve_turnstile(page)
-                        submit_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+                        submit_btn = page.locator(
+                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                        ).first
                         if await submit_btn.is_visible():
                             await submit_btn.click()
                         else:
@@ -449,7 +456,9 @@ class AutoLoginService:
                         self._log(f"[Luồng {worker_id}] Web Session: Timeout waiting for email input!")
 
                     # Wait for password input & resolve Turnstile
-                    pass_inp_web = page.locator('input[name="password"], input#password, input[type="password"]:not([aria-hidden="true"])').first
+                    pass_inp_web = page.locator(
+                        'input[name="password"], input#password, input[type="password"]:not([aria-hidden="true"])'
+                    ).first
                     pass_found = False
                     self._log(f"[Luồng {worker_id}] Web Session: Waiting for password input...")
                     for _ in range(15):
@@ -461,7 +470,9 @@ class AutoLoginService:
                             pass_found = True
                             break
                         # If still stuck on email step, re-submit
-                        btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+                        btn = page.locator(
+                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                        ).first
                         if await btn.is_visible() and await email_inp_web.is_visible():
                             try:
                                 await btn.click(timeout=1500)
@@ -473,7 +484,9 @@ class AutoLoginService:
                         self._log(f"[Luồng {worker_id}] Web Session: Điền mật khẩu cho {acc.email}...")
                         await _fill_input_safely(page, pass_inp_web, acc.password)
                         await _solve_turnstile(page)
-                        submit_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+                        submit_btn = page.locator(
+                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                        ).first
                         if await submit_btn.is_visible():
                             await submit_btn.click()
                         else:
@@ -551,7 +564,10 @@ class AutoLoginService:
                                     usage_repo = UsageRepository(db_session)
                                     service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
                                     await service.import_account(auth_bytes)
-                                self._log(f"🎉 [Luồng {worker_id}] Đã lấy Web Session (/api/auth/session) & nạp auth.json thành công cho {acc.email}!", level="success")
+                                self._log(
+                                    f"🎉 [Luồng {worker_id}] Đã lấy Web Session (/api/auth/session) & nạp auth.json thành công cho {acc.email}!",
+                                    level="success",
+                                )
                                 return True
                         except Exception as eval_err:
                             logger.debug("Session extraction attempt: %s", eval_err)
@@ -560,24 +576,27 @@ class AutoLoginService:
                     logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
                 return False
 
-            target_url = auth_resp.authorization_url or "https://chatgpt.com/auth/login"
+            target_url = "https://chatgpt.com/"
             self._log(f"[Luồng {worker_id}] Đang mở Web Auth ChatGPT ({acc.email})...")
             await page.goto(target_url, wait_until="domcontentloaded", timeout=35000)
             await asyncio.sleep(1.5)
 
             # Step A: Email
             self._log(f"[Luồng {worker_id}] Đang điền email {acc.email}...")
+            # Locator that explicitly looks for visible inputs
             email_input = page.locator(
-                'input[name="username"], input#username, input[type="email"], input[name="email"]'
+                'input[name="username"]:visible, input#username:visible, input[type="email"]:visible, input[name="email"]:visible'
             ).first
             try:
                 await email_input.wait_for(state="visible", timeout=6000)
             except Exception:
-                login_btn = page.locator('button:has-text("Log in"), a:has-text("Log in"), [data-testid="login-button"]').first
+                login_btn = page.locator(
+                    'button:has-text("Log in"), a:has-text("Log in"), [data-testid="login-button"]'
+                ).first
                 try:
                     if await login_btn.is_visible():
                         await login_btn.click(timeout=2000)
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(2)
                 except Exception:
                     pass
                 await email_input.wait_for(state="visible", timeout=15000)
@@ -585,7 +604,9 @@ class AutoLoginService:
             await _fill_input_safely(page, email_input, acc.email)
             await _solve_turnstile(page)
 
-            continue_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+            continue_btn = page.locator(
+                'button[type="submit"][name="action"][value="default"], button.continue-btn'
+            ).first
             try:
                 if await continue_btn.is_visible():
                     await continue_btn.click()
@@ -597,9 +618,7 @@ class AutoLoginService:
 
             # Step B: Password (with self-healing re-click & turnstile resolution)
             self._log(f"[Luồng {worker_id}] Đang điền mật khẩu cho {acc.email}...")
-            pass_input = page.locator(
-                'input[name="password"], input#password, input[type="password"]'
-            ).first
+            pass_input = page.locator('input[name="password"], input#password, input[type="password"]').first
 
             password_ready = False
             for retry_i in range(18):
@@ -622,7 +641,11 @@ class AutoLoginService:
                 # Check if account is deactivated or deleted
                 try:
                     page_body = await page.locator("body").inner_text()
-                    if "deactivated" in page_body.lower() or "deleted or deactivated" in page_body.lower() or "account_deactivated" in page_body:
+                    if (
+                        "deactivated" in page_body.lower()
+                        or "deleted or deactivated" in page_body.lower()
+                        or "account_deactivated" in page_body
+                    ):
                         raise ValueError("Tài khoản đã bị OpenAI vô hiệu hoá / xoá (account_deactivated)")
                 except ValueError:
                     raise
@@ -632,7 +655,9 @@ class AutoLoginService:
                 # If still stuck on email input after 3s, re-click submit
                 if retry_i in (2, 5, 9, 13):
                     try:
-                        btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+                        btn = page.locator(
+                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                        ).first
                         if await btn.is_visible():
                             await btn.click(timeout=1500)
                     except Exception:
@@ -653,7 +678,9 @@ class AutoLoginService:
             await _fill_input_safely(page, pass_input, acc.password)
             await _solve_turnstile(page)
 
-            submit_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+            submit_btn = page.locator(
+                'button[type="submit"][name="action"][value="default"], button.continue-btn'
+            ).first
             try:
                 if await submit_btn.is_visible():
                     await submit_btn.click()
@@ -687,7 +714,9 @@ class AutoLoginService:
                         self._log(f"[Luồng {worker_id}] ⚠️ Trang quay lại ô Email, đang tự động nạp lại & xác minh...")
                         await _fill_input_safely(page, em_el, acc.email)
                         await _solve_turnstile(page)
-                        c_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+                        c_btn = page.locator(
+                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                        ).first
                         if await c_btn.is_visible():
                             await c_btn.click()
                         else:
@@ -696,7 +725,9 @@ class AutoLoginService:
                         if await pw_el.is_visible():
                             await _fill_input_safely(page, pw_el, acc.password)
                             await _solve_turnstile(page)
-                            s_btn = page.locator('button[type="submit"][name="action"][value="default"], button.continue-btn').first
+                            s_btn = page.locator(
+                                'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                            ).first
                             if await s_btn.is_visible():
                                 await s_btn.click()
                             else:
@@ -707,7 +738,9 @@ class AutoLoginService:
 
                 # Check Landing on ChatGPT Web
                 if "chatgpt.com" in current_url and "auth.openai.com" not in current_url and "login" not in current_url:
-                    self._log(f"[Luồng {worker_id}] Đã đăng nhập vào Web ChatGPT ({acc.email}). Đang trích xuất Session...")
+                    self._log(
+                        f"[Luồng {worker_id}] Đã đăng nhập vào Web ChatGPT ({acc.email}). Đang trích xuất Session..."
+                    )
                     try:
                         session_resp = await context.request.get("https://chatgpt.com/api/auth/session")
                         if session_resp.status == 200:
@@ -724,7 +757,10 @@ class AutoLoginService:
                                     usage_repo = UsageRepository(db_session)
                                     service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
                                     await service.import_account(session_text.encode("utf-8"))
-                                self._log(f"🎉 [Luồng {worker_id}] Đã tự động nạp Session Web thành công cho {acc.email}!", level="success")
+                                self._log(
+                                    f"🎉 [Luồng {worker_id}] Đã tự động nạp Session Web thành công cho {acc.email}!",
+                                    level="success",
+                                )
                                 success = True
                                 break
                     except Exception as sess_err:
@@ -746,7 +782,9 @@ class AutoLoginService:
                             target_ws = ws_items.nth(click_idx)
                             raw_text = await target_ws.inner_text()
                             ws_name = raw_text.split("\n")[0].strip() if raw_text else f"Workspace #{click_idx + 1}"
-                            self._log(f"[Luồng {worker_id}] Phát hiện {ws_count} Workspace! Chọn [{click_idx + 1}/{ws_count}]: '{ws_name}'...")
+                            self._log(
+                                f"[Luồng {worker_id}] Phát hiện {ws_count} Workspace! Chọn [{click_idx + 1}/{ws_count}]: '{ws_name}'..."
+                            )
                             await target_ws.click()
                             workspace_clicked = True
                     except Exception:
@@ -822,7 +860,11 @@ class AutoLoginService:
                 # Check account deactivated or deleted error
                 try:
                     page_body = await page.locator("body").inner_text()
-                    if "deactivated" in page_body.lower() or "deleted or deactivated" in page_body.lower() or "account_deactivated" in page_body:
+                    if (
+                        "deactivated" in page_body.lower()
+                        or "deleted or deactivated" in page_body.lower()
+                        or "account_deactivated" in page_body
+                    ):
                         raise ValueError("Tài khoản đã bị OpenAI xoá/vô hiệu hoá (account_deactivated)")
                     if "wrong password" in page_body.lower() or "incorrect password" in page_body.lower():
                         raise ValueError("Mật khẩu không chính xác")
@@ -832,7 +874,10 @@ class AutoLoginService:
                     pass
 
                 # Check invalid 2FA error
-                if await page.locator('text="Invalid code"').count() > 0 or await page.locator('text="Mã không hợp lệ"').count() > 0:
+                if (
+                    await page.locator('text="Invalid code"').count() > 0
+                    or await page.locator('text="Mã không hợp lệ"').count() > 0
+                ):
                     raise ValueError("Mã 2FA không hợp lệ hoặc secret sai")
 
                 # Check errors
@@ -952,11 +997,21 @@ class AutoLoginService:
                             if err_msg and ("Số Điện Thoại" in err_msg or "Phone number required" in err_msg):
                                 acc.status = "PHONE_REQUIRED"
                                 acc.error = "OpenAI bắt buộc thêm Số Điện Thoại (Chờ xử lý qua Web Session)"
-                                self._log(f"📱 [Luồng {worker_id}] Dính cờ SĐT: {acc.email} -> Chuyển vào tab 'Dính SĐT'", level="warning")
-                            elif err_msg and ("deactivated" in err_msg.lower() or "vô hiệu hoá" in err_msg.lower() or "xoá" in err_msg.lower()):
+                                self._log(
+                                    f"📱 [Luồng {worker_id}] Dính cờ SĐT: {acc.email} -> Chuyển vào tab 'Dính SĐT'",
+                                    level="warning",
+                                )
+                            elif err_msg and (
+                                "deactivated" in err_msg.lower()
+                                or "vô hiệu hoá" in err_msg.lower()
+                                or "xoá" in err_msg.lower()
+                            ):
                                 acc.status = "DEACTIVATED"
                                 acc.error = "Tài khoản đã bị OpenAI vô hiệu hoá / xoá (account_deactivated)"
-                                self._log(f"🚫 [Luồng {worker_id}] Bị khoá: {acc.email} -> Tài khoản đã bị OpenAI vô hiệu hoá (Deactivated)", level="error")
+                                self._log(
+                                    f"🚫 [Luồng {worker_id}] Bị khoá: {acc.email} -> Tài khoản đã bị OpenAI vô hiệu hoá (Deactivated)",
+                                    level="error",
+                                )
                             else:
                                 acc.status = "FAILED"
                                 acc.error = err_msg or "Quá thời gian xác thực OAuth (Timeout)"
@@ -1044,18 +1099,24 @@ class AutoLoginService:
                     worker_id=1,
                 )
                 if success:
-                    self._log(f"🎉 [401 Auto-Recovery] Tự động đăng nhập lại thành công cho {acc.email}!", level="success")
+                    self._log(
+                        f"🎉 [401 Auto-Recovery] Tự động đăng nhập lại thành công cho {acc.email}!", level="success"
+                    )
                     return True, None
                 else:
                     err = err_msg or "Xác thực OAuth thất bại hoặc quá thời gian."
                     if err_msg and any(k in err_msg.lower() for k in ["deactivated", "vô hiệu hoá", "xoá", "bị khoá"]):
-                        from app.db.session import get_background_session
-                        from app.db.models import Account, AccountStatus
                         from sqlalchemy import update
+
+                        from app.db.models import Account, AccountStatus
+                        from app.db.session import get_background_session
+
                         try:
                             async with get_background_session() as db_sess:
                                 await db_sess.execute(
-                                    update(Account).where(Account.email == acc.email).values(status=AccountStatus.DEACTIVATED)
+                                    update(Account)
+                                    .where(Account.email == acc.email)
+                                    .values(status=AccountStatus.DEACTIVATED)
                                 )
                                 await db_sess.commit()
                         except Exception:
@@ -1073,9 +1134,10 @@ class AutoLoginService:
         force: bool = False,
     ) -> dict[str, Any]:
         """Scan DB for all accounts requiring reauth/401, match with Vault, and relogin them concurrently."""
-        from app.db.session import get_background_session
-        from app.db.models import Account, AccountStatus
         from sqlalchemy import select
+
+        from app.db.models import Account, AccountStatus
+        from app.db.session import get_background_session
 
         async with get_background_session() as db_session:
             stmt = select(Account.id, Account.email).where(
@@ -1119,7 +1181,7 @@ class AutoLoginService:
             elif no_credentials_count > 0:
                 msg = f"Tìm thấy {len(accounts_401_data)} tài khoản 401 ({no_credentials_count} tài khoản chưa lưu mật khẩu trong Vault)."
             else:
-                msg = f"Không có tài khoản 401 nào sẵn sàng để đăng nhập lại."
+                msg = "Không có tài khoản 401 nào sẵn sàng để đăng nhập lại."
             return {
                 "total_401": len(accounts_401_data),
                 "reauthed": 0,
@@ -1145,7 +1207,7 @@ class AutoLoginService:
                 success, _ = await self.relogin_single_account(
                     email=target_email,
                     oauth_service=oauth_service,
-                    headless=True,
+                    headless=False,
                 )
                 if success:
                     reauthed_count += 1
@@ -1157,7 +1219,10 @@ class AutoLoginService:
         await asyncio.gather(*tasks)
 
         msg = f"Đã khôi phục thành công {reauthed_count}/{len(eligible_emails)} tài khoản 401!"
-        self._log(f"🎉 [Auto-Reauth Batch] {msg} (Thất bại: {failed_count})", level="success" if reauthed_count > 0 else "warning")
+        self._log(
+            f"🎉 [Auto-Reauth Batch] {msg} (Thất bại: {failed_count})",
+            level="success" if reauthed_count > 0 else "warning",
+        )
 
         return {
             "total_401": len(accounts_401_data),
@@ -1173,9 +1238,9 @@ class AutoLoginService:
             return
 
         async def _watchdog_loop():
-            from app.modules.oauth.service import OauthService
             from app.db.session import get_background_session
             from app.modules.accounts.repository import AccountsRepository
+            from app.modules.oauth.service import OauthService
 
             while True:
                 await asyncio.sleep(40)
@@ -1198,9 +1263,9 @@ class AutoLoginService:
         await asyncio.sleep(2)
         if self._status != "running":
             try:
-                from app.modules.oauth.service import OauthService
                 from app.db.session import get_background_session
                 from app.modules.accounts.repository import AccountsRepository
+                from app.modules.oauth.service import OauthService
 
                 async with get_background_session() as db_session:
                     repo = AccountsRepository(db_session)
@@ -1215,4 +1280,3 @@ _AUTO_LOGIN_SINGLETON = AutoLoginService()
 
 def get_auto_login_service() -> AutoLoginService:
     return _AUTO_LOGIN_SINGLETON
-

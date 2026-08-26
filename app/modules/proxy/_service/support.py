@@ -1358,6 +1358,7 @@ class _WebSocketContinuityState:
     last_pending_tool_call_types: dict[str, str] = field(default_factory=dict)
     responses_lite_model: str | None = None
     responses_lite_response_id: str | None = None
+    account_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

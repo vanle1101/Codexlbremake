@@ -3143,6 +3143,7 @@ class _WebSocketMixin:
         request_state.expose_stale_previous_response_classifier = codex_session_affinity
         request_state.require_security_work_authorized = capability_route.require_security_work_authorized
         request_state.durable_capability_lineage_required = capability_route.require_security_work_authorized
+
         original_full_resend_input: JsonValue | None = None
         if session_anchor is not None:
             request_state.proxy_injected_previous_response_id = True
@@ -3507,6 +3508,37 @@ class _WebSocketMixin:
                 # cannot find a replacement. Once this replacement attempt
                 # starts, a connection/open failure belongs to the replacement.
                 _clear_websocket_precreated_replay_fallback(request_state)
+
+            if (
+                request_state.previous_response_id is not None
+                and request_state.preferred_account_id is not None
+                and request_state.preferred_account_id != account.id
+            ):
+                _facade().logger.warning(
+                    "websocket_account_changed_stripping_previous_response_id request_id=%s known_owner=%s new_account_id=%s",
+                    request_state.request_id,
+                    request_state.preferred_account_id,
+                    account.id,
+                )
+                request_state.proxy_injected_previous_response_id = False
+                request_state.previous_response_id = None
+                if client_full_resend_payload is not None:
+                    _responses_payload = client_full_resend_payload
+                    _client_metadata = full_resend_client_metadata
+                else:
+                    _responses_payload = responses_payload.model_copy(update={"previous_response_id": None})
+                    _client_metadata = client_metadata
+                
+                request_state.fresh_upstream_request_text = _facade()._response_create_text_with_size_guard(
+                    _responses_payload,
+                    include_type_field=True,
+                    client_metadata=_client_metadata,
+                    request_state=request_state,
+                    transport=_REQUEST_TRANSPORT_WEBSOCKET,
+                )
+                request_state.fresh_upstream_request_is_retry_safe = True
+                text_data = request_state.fresh_upstream_request_text
+
 
             try:
                 connect_result = await proxy._try_open_websocket_connect_attempt(
@@ -5589,6 +5621,7 @@ class _WebSocketMixin:
                 continuity_state,
                 request_state=request_state,
                 response_id=response_id,
+                account_id=account.id,
             )
 
         if request_state is not None and event_type in {"response.failed", "error"}:

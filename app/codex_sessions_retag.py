@@ -209,8 +209,12 @@ def _find_jsonl_session_files(sessions_dir: Path) -> tuple[Path, ...]:
 
 
 def _find_state_dbs(codex_home: Path) -> tuple[Path, ...]:
-    state_dbs = (path for path in codex_home.glob(_STATE_DB_PATTERN) if path.is_file())
-    return tuple(sorted(state_dbs, key=_state_db_sort_key))
+    state_dbs = list(codex_home.glob(_STATE_DB_PATTERN))
+    sqlite_dir = codex_home / "sqlite"
+    if sqlite_dir.is_dir():
+        state_dbs.extend(sqlite_dir.glob("*.db"))
+        state_dbs.extend(sqlite_dir.glob("*.sqlite"))
+    return tuple(sorted([p for p in state_dbs if p.is_file()], key=_state_db_sort_key))
 
 
 def _state_db_sort_key(path: Path) -> tuple[int, str]:
@@ -303,15 +307,26 @@ def _retag_jsonl_record_provider(record: JsonObject, source_provider: str, targe
     return True
 
 
+def _sqlite_get_provider_tables(conn: sqlite3.Connection) -> list[str]:
+    tables: list[str] = []
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    for row in rows:
+        table_name = str(row[0])
+        col_rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        if any(col[1] == "model_provider" for col in col_rows):
+            tables.append(table_name)
+    return tables
+
+
 def _sqlite_count_provider_rows(db_path: Path, provider: str) -> int:
     try:
         with _connect_sqlite(db_path, read_only=True) as conn:
-            if not _sqlite_has_threads_table(conn):
-                return 0
-            if not _sqlite_has_model_provider_column(conn):
-                return 0
-            row = conn.execute("SELECT COUNT(*) FROM threads WHERE model_provider = ?", (provider,)).fetchone()
-            return int(row[0]) if row is not None else 0
+            tables = _sqlite_get_provider_tables(conn)
+            total = 0
+            for table in tables:
+                row = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE model_provider = ? OR (model_provider IS NULL AND ? = 'openai')", (provider, provider)).fetchone()
+                total += int(row[0]) if row is not None else 0
+            return total
     except sqlite3.OperationalError as exc:
         if "unable to open database file" not in str(exc).casefold():
             raise
@@ -332,14 +347,23 @@ def _update_sqlite_provider(db_path: Path, source_provider: str, target_provider
 
 def _update_sqlite_provider_in_place(db_path: Path, source_provider: str, target_provider: str) -> int:
     with _connect_sqlite(db_path) as conn:
-        if not _sqlite_has_threads_table(conn):
-            return 0
-        cursor = conn.execute(
-            "UPDATE threads SET model_provider = ? WHERE model_provider = ?",
-            (target_provider, source_provider),
-        )
+        tables = _sqlite_get_provider_tables(conn)
+        total_updated = 0
+        for table in tables:
+            if source_provider == "openai":
+                cursor = conn.execute(
+                    f"UPDATE {table} SET model_provider = ? WHERE model_provider = ? OR model_provider IS NULL",
+                    (target_provider, source_provider),
+                )
+            else:
+                cursor = conn.execute(
+                    f"UPDATE {table} SET model_provider = ? WHERE model_provider = ?",
+                    (target_provider, source_provider),
+                )
+            if cursor.rowcount > 0:
+                total_updated += cursor.rowcount
         conn.commit()
-        return int(cursor.rowcount if cursor.rowcount != -1 else 0)
+        return total_updated
 
 
 def _update_sqlite_provider_via_copy(db_path: Path, source_provider: str, target_provider: str) -> int:
@@ -413,16 +437,14 @@ def _provider_counts(codex_home: Path) -> tuple[ProviderCount, ...]:
     for db_path in _find_state_dbs(codex_home):
         try:
             with _connect_sqlite(db_path, read_only=True) as conn:
-                if not _sqlite_has_threads_table(conn):
-                    continue
-                if not _sqlite_has_model_provider_column(conn):
-                    continue
-                rows = conn.execute(
-                    "SELECT model_provider, COUNT(*) FROM threads GROUP BY model_provider",
-                ).fetchall()
-                for provider, count in rows:
-                    if isinstance(provider, str):
-                        counts[provider] = counts.get(provider, 0) + int(count)
+                tables = _sqlite_get_provider_tables(conn)
+                for table in tables:
+                    rows = conn.execute(
+                        f"SELECT COALESCE(model_provider, 'openai'), COUNT(*) FROM {table} GROUP BY model_provider",
+                    ).fetchall()
+                    for provider, count in rows:
+                        if isinstance(provider, str):
+                            counts[provider] = counts.get(provider, 0) + int(count)
         except sqlite3.OperationalError as exc:
             if "unable to open database file" not in str(exc).casefold():
                 raise

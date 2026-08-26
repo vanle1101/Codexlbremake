@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 
 import aiohttp
@@ -33,6 +33,7 @@ from app.core.clients.usage import (
 )
 from app.core.config.settings import get_settings
 from app.core.crypto import TokenEncryptor
+from app.core.exceptions import DashboardNotFoundError
 from app.core.plan_types import coerce_account_plan_type
 from app.core.upstream_proxy import ResolvedUpstreamRoute, UpstreamProxyRouteError, resolve_upstream_route
 from app.core.upstream_proxy.cache import get_upstream_route_cache
@@ -62,9 +63,9 @@ from app.modules.accounts.schemas import (
     AccountUsageResetConsumeResponse,
     AccountUsageResetCredits,
     AccountUsageResetCreditsResponse,
+    CodexActiveAccountResponse,
     CodexAuthJson,
     CodexAuthTokens,
-    CodexActiveAccountResponse,
     OpenCodeAuthJson,
     OpenCodeOAuthAuth,
     SwitchToCodexResponse,
@@ -556,6 +557,7 @@ class AccountsService:
         # Terminate running ChatGPT Desktop App and restart it with the new auth.json
         try:
             import subprocess
+
             # Force kill running ChatGPT instances so it re-reads auth.json on launch
             subprocess.run(
                 ["taskkill", "/F", "/IM", "ChatGPT.exe"],
@@ -565,7 +567,7 @@ class AccountsService:
             time.sleep(0.4)
             # Launch fresh ChatGPT Desktop App with new auth tokens
             subprocess.Popen(
-                'explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+                "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
                 shell=True,
             )
         except Exception as e:
@@ -600,6 +602,7 @@ class AccountsService:
                     parts = id_token.split(".")
                     if len(parts) >= 2:
                         import base64
+
                         padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
                         claims = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
                         email = claims.get("email") or (claims.get("https://api.openai.com/profile") or {}).get("email")
@@ -623,27 +626,30 @@ class AccountsService:
                 id_tok = self._encryptor.decrypt(a.id_token_encrypted) if a.id_token_encrypted else None
             except Exception:
                 acc_tok, ref_tok, id_tok = None, None, None
-            result.append({
-                "id": a.id,
-                "email": a.email,
-                "chatgpt_account_id": a.chatgpt_account_id,
-                "plan_type": a.plan_type,
-                "alias": a.alias,
-                "workspace_id": a.workspace_id,
-                "workspace_label": a.workspace_label,
-                "routing_policy": getattr(a, "routing_policy", "normal"),
-                "tokens": {
-                    "access_token": acc_tok,
-                    "refresh_token": ref_tok,
-                    "id_token": id_tok,
-                    "account_id": a.chatgpt_account_id,
+            result.append(
+                {
+                    "id": a.id,
+                    "email": a.email,
+                    "chatgpt_account_id": a.chatgpt_account_id,
+                    "plan_type": a.plan_type,
+                    "alias": a.alias,
+                    "workspace_id": a.workspace_id,
+                    "workspace_label": a.workspace_label,
+                    "routing_policy": getattr(a, "routing_policy", "normal"),
+                    "tokens": {
+                        "access_token": acc_tok,
+                        "refresh_token": ref_tok,
+                        "id_token": id_tok,
+                        "account_id": a.chatgpt_account_id,
+                    },
                 }
-            })
+            )
         return result
 
     async def export_all_bulk_txt(self) -> str:
         from app.db.models import AccountStatus
         from app.modules.accounts.auto_login import get_auto_login_service
+
         auto_login_service = get_auto_login_service()
         accounts = await self._repo.list_accounts()
         lines: list[str] = []
@@ -670,9 +676,11 @@ class AccountsService:
         except Exception:
             bulk_data = None
 
-        if isinstance(bulk_data, list) or (isinstance(bulk_data, dict) and "accounts" in bulk_data and isinstance(bulk_data["accounts"], list)):
+        if isinstance(bulk_data, list) or (
+            isinstance(bulk_data, dict) and "accounts" in bulk_data and isinstance(bulk_data["accounts"], list)
+        ):
             items = bulk_data if isinstance(bulk_data, list) else bulk_data["accounts"]
-            
+
             # 1. Deduplication within the imported JSON payload
             unique_items: list[dict] = []
             seen_keys: set[str] = set()
@@ -685,7 +693,7 @@ class AccountsService:
                 email_hint = (item.get("email") or "").strip().lower()
                 ws_hint = str(item.get("workspace_id") or "")
                 acc_hint = str(item.get("chatgpt_account_id") or item.get("account_id") or item.get("id") or "")
-                
+
                 if email_hint:
                     dedupe_key = f"{email_hint}::{ws_hint}"
                 elif acc_hint:
@@ -700,9 +708,12 @@ class AccountsService:
                 unique_items.append(item)
 
             if duplicates_count > 0:
-                logger.info(f"🔍 [Import JSON] Đã lọc bỏ {duplicates_count} tài khoản trùng lặp trong file JSON nạp vào.")
+                logger.info(
+                    f"🔍 [Import JSON] Đã lọc bỏ {duplicates_count} tài khoản trùng lặp trong file JSON nạp vào."
+                )
 
             from app.modules.accounts.auto_login import get_auto_login_service
+
             auto_login_service = get_auto_login_service()
             saved_list = []
 
@@ -712,7 +723,9 @@ class AccountsService:
                     acc_token = tokens.get("access_token") or item.get("access_token")
                     ref_token = tokens.get("refresh_token") or item.get("refresh_token")
                     id_token = tokens.get("id_token") or item.get("id_token") or acc_token
-                    chatgpt_acc_id = tokens.get("account_id") or item.get("chatgpt_account_id") or item.get("account_id")
+                    chatgpt_acc_id = (
+                        tokens.get("account_id") or item.get("chatgpt_account_id") or item.get("account_id")
+                    )
 
                     if not acc_token:
                         continue
@@ -739,8 +752,12 @@ class AccountsService:
                     workspace_id = item.get("workspace_id") or (claims.workspace_id if claims else None)
                     workspace_label = item.get("workspace_label") or (claims.workspace_label if claims else None)
                     seat_type = item.get("seat_type") or (claims.seat_type if claims else None)
-                    plan_type = item.get("plan_type") or (coerce_account_plan_type(claims.plan_type, DEFAULT_PLAN) if claims else DEFAULT_PLAN)
-                    account_id = item.get("id") or generate_unique_account_id(raw_account_id, email, workspace_id, workspace_label)
+                    plan_type = item.get("plan_type") or (
+                        coerce_account_plan_type(claims.plan_type, DEFAULT_PLAN) if claims else DEFAULT_PLAN
+                    )
+                    account_id = item.get("id") or generate_unique_account_id(
+                        raw_account_id, email, workspace_id, workspace_label
+                    )
 
                     # Auto-save credentials to Vault if present in JSON
                     pwd = item.get("password") or item.get("pass")
@@ -757,8 +774,12 @@ class AccountsService:
                         seat_type=seat_type,
                         plan_type=plan_type,
                         access_token_encrypted=self._encryptor.encrypt(acc_token),
-                        refresh_token_encrypted=self._encryptor.encrypt(ref_token) if ref_token else self._encryptor.encrypt(""),
-                        id_token_encrypted=self._encryptor.encrypt(id_token) if id_token else self._encryptor.encrypt(""),
+                        refresh_token_encrypted=self._encryptor.encrypt(ref_token)
+                        if ref_token
+                        else self._encryptor.encrypt(""),
+                        id_token_encrypted=self._encryptor.encrypt(id_token)
+                        if id_token
+                        else self._encryptor.encrypt(""),
                         last_refresh=utcnow(),
                         status=AccountStatus.ACTIVE,
                         deactivation_reason=None,
@@ -957,6 +978,7 @@ class AccountsService:
         if account and account.email:
             try:
                 from app.modules.accounts.auto_login import get_auto_login_service
+
                 get_auto_login_service().remove_credential(account.email)
             except Exception:
                 pass
@@ -1188,6 +1210,7 @@ class AccountsService:
 
         # 2. If token refresh is not viable, try Auto-Login using saved credentials in Vault
         from app.modules.accounts.auto_login import get_auto_login_service
+
         auto_login_service = get_auto_login_service()
 
         if auto_login_service.has_credential(account.email):
