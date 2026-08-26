@@ -1204,11 +1204,26 @@ async def _process_upstream_websocket_transport_end(
             replay_refusal_reasons=replay_refusal_reasons,
         )
     if replay_request_state is not None:
+        replay_request_state.excluded_account_ids.add(account.id)
+        replay_request_state.preferred_account_id = None
+        replay_request_state.previous_response_id = None
+        replay_request_state.proxy_injected_previous_response_id = False
+        replay_request_state.affinity_policy = replace(
+            replay_request_state.affinity_policy,
+            reallocate_sticky=True,
+        )
+        if not account_neutral:
+            try:
+                await proxy._load_balancer.record_error_backoff(account)
+            except Exception:
+                _facade().logger.warning("Failed to record error backoff for replay account %s", account.id, exc_info=True)
+        upstream_control.reconnect_requested = True
         upstream_control.replay_request_state = replay_request_state
         _facade().logger.info(
-            "Transparent websocket replay after upstream close request_id=%s close_code=%s",
+            "Transparent websocket replay after upstream close request_id=%s close_code=%s excluded_account=%s",
             replay_request_state.request_log_id or replay_request_state.request_id,
             message.close_code,
+            account.id,
         )
         try:
             await upstream.close()
