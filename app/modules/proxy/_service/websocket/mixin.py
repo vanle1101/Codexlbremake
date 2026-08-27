@@ -1216,7 +1216,9 @@ async def _process_upstream_websocket_transport_end(
             try:
                 await proxy._load_balancer.record_error_backoff(account)
             except Exception:
-                _facade().logger.warning("Failed to record error backoff for replay account %s", account.id, exc_info=True)
+                _facade().logger.warning(
+                    "Failed to record error backoff for replay account %s", account.id, exc_info=True
+                )
         upstream_control.reconnect_requested = True
         upstream_control.replay_request_state = replay_request_state
         _facade().logger.info(
@@ -3525,34 +3527,18 @@ class _WebSocketMixin:
                 _clear_websocket_precreated_replay_fallback(request_state)
 
             if request_state.previous_response_id is not None and (
-                request_state.preferred_account_id is None
-                or request_state.preferred_account_id != account.id
+                request_state.preferred_account_id is None or request_state.preferred_account_id != account.id
             ):
                 _facade().logger.warning(
-                    "websocket_account_changed_stripping_previous_response_id request_id=%s known_owner=%s new_account_id=%s",
+                    (
+                        "websocket_account_changed_stripping_previous_response_id "
+                        "request_id=%s known_owner=%s new_account_id=%s"
+                    ),
                     request_state.request_id,
                     request_state.preferred_account_id,
                     account.id,
                 )
-                request_state.proxy_injected_previous_response_id = False
-                request_state.previous_response_id = None
-                if client_full_resend_payload is not None:
-                    _responses_payload = client_full_resend_payload
-                    _client_metadata = full_resend_client_metadata
-                else:
-                    _responses_payload = responses_payload.model_copy(update={"previous_response_id": None})
-                    _client_metadata = client_metadata
-                
-                request_state.fresh_upstream_request_text = _facade()._response_create_text_with_size_guard(
-                    _responses_payload,
-                    include_type_field=True,
-                    client_metadata=_client_metadata,
-                    request_state=request_state,
-                    transport=_REQUEST_TRANSPORT_WEBSOCKET,
-                )
-                request_state.fresh_upstream_request_is_retry_safe = True
-                text_data = request_state.fresh_upstream_request_text
-
+                _prepare_websocket_request_state_for_account_switch(request_state)
 
             try:
                 connect_result = await proxy._try_open_websocket_connect_attempt(
