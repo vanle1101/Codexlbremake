@@ -425,6 +425,29 @@ export function formatQuotaResetLabel(resetAt: string | null | undefined): strin
   return formatResetRelative(diffMs);
 }
 
+export function formatQuotaResetDetail(
+  resetAt: string | null | undefined,
+  percent: number | null | undefined,
+): string {
+  if (percent !== null && percent !== undefined && percent >= 100) {
+    return "100% dung lượng";
+  }
+  const date = parseDate(resetAt);
+  if (!date || date.getTime() <= 0) {
+    return "--";
+  }
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs <= 0) {
+    return "Đã hồi phục";
+  }
+  const rel = formatResetRelative(diffMs);
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${rel} (${mm}/${dd} ${hh}:${min})`;
+}
+
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;

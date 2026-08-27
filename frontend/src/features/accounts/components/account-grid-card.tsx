@@ -52,6 +52,7 @@ import { getPlanBadgeStyle } from "@/utils/plan-style";
 import {
   formatDateTimeInline,
   formatPercentNullable,
+  formatQuotaResetDetail,
   formatQuotaResetLabel,
   formatSlug,
 } from "@/utils/formatters";
@@ -113,15 +114,14 @@ function AccountGridCardComponent({
     account.status === "reauth_required" ||
     status === "error";
 
-  // Quota computations
-  const secondaryRemaining = account.usage?.secondaryRemainingPercent;
+  // Quota computations (5h & Weekly)
   const primaryRemaining = account.usage?.primaryRemainingPercent;
-  const displayRemaining = secondaryRemaining ?? primaryRemaining ?? 0;
-  const clampedRemaining = Math.max(0, Math.min(100, displayRemaining));
+  const clamped5h = primaryRemaining !== null && primaryRemaining !== undefined ? Math.max(0, Math.min(100, primaryRemaining)) : 100;
+  const reset5hLabel = formatQuotaResetDetail(account.resetAtPrimary ?? null, primaryRemaining);
 
-  const resetLabel = formatQuotaResetLabel(
-    account.resetAtSecondary ?? account.resetAtPrimary ?? null,
-  );
+  const secondaryRemaining = account.usage?.secondaryRemainingPercent;
+  const clampedWeekly = secondaryRemaining !== null && secondaryRemaining !== undefined ? Math.max(0, Math.min(100, secondaryRemaining)) : clamped5h;
+  const resetWeeklyLabel = formatQuotaResetDetail(account.resetAtSecondary ?? null, secondaryRemaining);
 
   const availableCredits =
     account.availableResetCredits ??
@@ -349,10 +349,53 @@ function AccountGridCardComponent({
           </div>
         ) : null}
 
-        {/* 5. Weekly Quota Progress */}
+        {/* 5A. 5h Quota Progress */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-foreground">Weekly</span>
+            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>5h</span>
+            </div>
+            <span
+              className={cn(
+                "font-mono font-bold text-xs",
+                clamped5h >= 70
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : clamped5h >= 30
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-red-600 dark:text-red-400",
+              )}
+            >
+              {clamped5h}%
+            </span>
+          </div>
+
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted/80">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-300",
+                clamped5h >= 70
+                  ? "bg-emerald-500"
+                  : clamped5h >= 30
+                    ? "bg-amber-500"
+                    : "bg-red-500",
+              )}
+              style={{ width: `${clamped5h}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-end text-[11px] text-muted-foreground font-medium pt-0.5">
+            <span>{reset5hLabel}</span>
+          </div>
+        </div>
+
+        {/* 5B. Weekly Quota Progress */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 font-semibold text-foreground">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Weekly</span>
+            </div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] text-muted-foreground">
                 0 req &nbsp; 0 &nbsp; A $0.00
@@ -360,14 +403,14 @@ function AccountGridCardComponent({
               <span
                 className={cn(
                   "font-mono font-bold text-xs",
-                  clampedRemaining >= 70
+                  clampedWeekly >= 70
                     ? "text-emerald-600 dark:text-emerald-400"
-                    : clampedRemaining >= 30
+                    : clampedWeekly >= 30
                       ? "text-amber-600 dark:text-amber-400"
                       : "text-red-600 dark:text-red-400",
                 )}
               >
-                {clampedRemaining}%
+                {clampedWeekly}%
               </span>
             </div>
           </div>
@@ -376,19 +419,18 @@ function AccountGridCardComponent({
             <div
               className={cn(
                 "h-full rounded-full transition-all duration-300",
-                clampedRemaining >= 70
+                clampedWeekly >= 70
                   ? "bg-emerald-500"
-                  : clampedRemaining >= 30
+                  : clampedWeekly >= 30
                     ? "bg-amber-500"
                     : "bg-red-500",
               )}
-              style={{ width: `${clampedRemaining}%` }}
+              style={{ width: `${clampedWeekly}%` }}
             />
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium pt-0.5">
-            <Clock className="h-3 w-3 text-muted-foreground/80" />
-            <span>{resetLabel}</span>
+          <div className="flex items-center justify-end text-[11px] text-muted-foreground font-medium pt-0.5">
+            <span>{resetWeeklyLabel}</span>
           </div>
         </div>
 

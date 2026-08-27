@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response
 
@@ -22,6 +23,7 @@ from app.core.middleware.multipart_content_encoding import raise_for_unsupported
 from app.core.multipart import ACCOUNT_IMPORT_MULTIPART_POLICY, bounded_multipart_form, read_bounded_upload
 from app.core.multipart_fields import required_upload
 from app.core.upstream_proxy import UpstreamProxyRouteError
+from app.db.models import AccountStatus
 from app.dependencies import (
     AccountsContext,
     OauthContext,
@@ -597,6 +599,59 @@ async def update_account(
         },
     )
     return AccountUpdateResponse(status="updated")
+
+
+@router.post("/probe-all")
+async def probe_all_accounts(
+    request: Request,
+    _write_access=Depends(require_dashboard_write_access),
+    context: AccountsContext = Depends(get_accounts_context),
+) -> dict[str, Any]:
+    """Probe all eligible accounts concurrently to refresh live quotas and wake up stuck accounts."""
+    import asyncio
+
+    accounts = await context.service._repo.list_accounts()
+    eligible = [
+        a
+        for a in accounts
+        if a.status
+        not in (
+            AccountStatus.PAUSED,
+            AccountStatus.REAUTH_REQUIRED,
+            AccountStatus.DEACTIVATED,
+        )
+    ]
+
+    semaphore = asyncio.Semaphore(5)
+    success_count = 0
+    fail_count = 0
+
+    async def _probe_single(acc):
+        nonlocal success_count, fail_count
+        async with semaphore:
+            try:
+                res = await context.service.probe_account(acc.id)
+                if res and 200 <= res.probe_status_code < 300:
+                    success_count += 1
+                    try:
+                        await get_proxy_service_for_app(request.app).record_account_probe_result(
+                            account_id=acc.id,
+                            http_status=res.probe_status_code,
+                        )
+                    except Exception:
+                        pass
+                else:
+                    fail_count += 1
+            except Exception:
+                fail_count += 1
+
+    await asyncio.gather(*[_probe_single(a) for a in eligible], return_exceptions=True)
+    return {
+        "total": len(eligible),
+        "success": success_count,
+        "failed": fail_count,
+        "message": f"Đã đánh thức & kiểm tra {success_count}/{len(eligible)} tài khoản thành công!",
+    }
 
 
 @router.post("/{account_id}/probe", response_model=AccountProbeResponse)

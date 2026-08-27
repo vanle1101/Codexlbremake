@@ -463,6 +463,53 @@ export function AccountsGridPage() {
     }
   };
 
+  // Tính tổng dung lượng 5h & Weekly cho nhóm PLUS
+  const plusAccounts = rawAccounts.filter((a) => {
+    const plan = (a.planType || "").toLowerCase();
+    return plan.includes("plus") || plan === "chatgptplusplan";
+  });
+  const validPlusAccounts = plusAccounts.filter(
+    (a) =>
+      normalizeStatus(a.status) !== "deactivated" &&
+      normalizeStatus(a.status) !== "reauth" &&
+      a.status !== "reauth_required",
+  );
+
+  const total5hPercent = validPlusAccounts.reduce((acc, a) => {
+    const p = a.usage?.primaryRemainingPercent;
+    return acc + (p !== null && p !== undefined ? p : 100);
+  }, 0);
+
+  const totalWeeklyPercent = validPlusAccounts.reduce((acc, a) => {
+    const p = a.usage?.secondaryRemainingPercent ?? a.usage?.primaryRemainingPercent;
+    return acc + (p !== null && p !== undefined ? p : 100);
+  }, 0);
+
+  const goodPlusCount = validPlusAccounts.filter((a) => (a.usage?.primaryRemainingPercent ?? 100) > 0).length;
+  const waitingPlusCount = validPlusAccounts.filter((a) => (a.usage?.primaryRemainingPercent ?? 100) <= 0).length;
+
+  const [isWakingUp, setIsWakingUp] = useState(false);
+
+  const handleWakeUpAccounts = async () => {
+    setIsWakingUp(true);
+    try {
+      const res = await fetch("/api/accounts/probe-all", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || "Đã đánh thức & kiểm tra hạn mức tài khoản!");
+      } else {
+        await accountsQuery.refetch();
+        toast.success("Đã cập nhật danh sách & hạn mức tài khoản!");
+      }
+      void accountsQuery.refetch();
+    } catch {
+      await accountsQuery.refetch();
+      toast.success("Đã cập nhật danh sách & hạn mức tài khoản!");
+    } finally {
+      setIsWakingUp(false);
+    }
+  };
+
   const isSwitchingAny = switchToCodexMutation.isPending;
   const switchingAccountId = switchToCodexMutation.isPending ? switchToCodexMutation.variables : null;
 
@@ -502,6 +549,19 @@ export function AccountsGridPage() {
           >
             <RefreshCw className={cn("h-3.5 w-3.5", (isManualRefreshing || accountsQuery.isFetching) && "animate-spin text-primary")} />
             <span className="hidden sm:inline">Làm mới</span>
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isWakingUp}
+            onClick={handleWakeUpAccounts}
+            title="Gửi tín hiệu kiểm tra & làm mới hạn mức 5h/Tuần cho tất cả tài khoản"
+            className="h-8 px-2.5 text-xs font-semibold gap-1 border-amber-500/40 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400"
+          >
+            <Zap className={cn("h-3.5 w-3.5", isWakingUp && "animate-spin text-amber-500")} />
+            <span>{isWakingUp ? "Đang kiểm tra..." : "Đánh thức tài khoản"}</span>
           </Button>
 
           {/* Subagents Switch */}
@@ -655,6 +715,40 @@ export function AccountsGridPage() {
           )}
         </div>
       </div>
+
+      {/* 1B. Tổng quan hạn mức nhóm PLUS & Trạng thái hoạt động */}
+      {plusAccounts.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5 text-xs text-foreground shadow-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 font-bold text-emerald-600 dark:text-emerald-400">
+                PLUS ({plusAccounts.length})
+              </span>
+              <span className="font-semibold text-foreground">
+                5h: <strong className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">{total5hPercent}%</strong> &nbsp;|&nbsp; Tuần: <strong className="text-amber-600 dark:text-amber-400 font-bold font-mono">{totalWeeklyPercent}%</strong>
+              </span>
+            </div>
+            <div className="h-4 w-px bg-border hidden sm:block" />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>
+                Nhóm tài khoản: <span className="font-semibold text-emerald-600 dark:text-emerald-400">Tốt {goodPlusCount}/{plusAccounts.length}</span> • <span className="font-semibold text-red-600 dark:text-red-400">Lỗi {error401Count + deactivatedCount}</span> • <span className="font-semibold text-amber-600 dark:text-amber-400">Chờ {waitingPlusCount + exceededCount}</span>
+              </span>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isWakingUp}
+            onClick={handleWakeUpAccounts}
+            className="h-7 px-2.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400 font-semibold shrink-0"
+            title="Đánh thức và làm mới hạn mức 5h của toàn bộ tài khoản"
+          >
+            <Zap className={cn("mr-1 h-3 w-3", isWakingUp && "animate-spin text-amber-500")} />
+            {isWakingUp ? "Đang kiểm tra..." : "Đánh thức tài khoản"}
+          </Button>
+        </div>
+      )}
 
       {/* 2. Stat badges */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
