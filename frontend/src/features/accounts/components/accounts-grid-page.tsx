@@ -186,6 +186,16 @@ export function AccountsGridPage() {
       list = list.filter((a) => (a.planType || "").toLowerCase() === planFilter);
     }
 
+    // 1. Tự động gỡ bỏ các tài khoản trùng lặp (giữ 1 bản duy nhất theo email)
+    const seenEmails = new Set<string>();
+    list = list.filter((a) => {
+      const email = (a.email || "").trim().toLowerCase();
+      if (!email) return true;
+      if (seenEmails.has(email)) return false;
+      seenEmails.add(email);
+      return true;
+    });
+
     const getStatusRank = (acc: AccountSummary): number => {
       const s = normalizeStatus(acc.status);
       if (s === "active") return 1;
@@ -196,8 +206,24 @@ export function AccountsGridPage() {
       return 3;
     };
 
-    // Sorting: always put active accounts on top first, then sort by selected option
+    // Sorting:
+    // 1. Tài khoản đang dùng trong Codex (codexActive) LUÔN LUÔN đứng ĐẦU TIÊN (Top 1)
+    // 2. Tiếp theo là các tài khoản Active -> Exceeded -> Paused -> Reauth -> Deactivated
+    // 3. Cuối cùng sắp xếp theo sortOption đã chọn
     list.sort((a, b) => {
+      const isCodexA = Boolean(
+        codexActive?.email &&
+        a.email &&
+        a.email.toLowerCase() === codexActive.email.toLowerCase(),
+      );
+      const isCodexB = Boolean(
+        codexActive?.email &&
+        b.email &&
+        b.email.toLowerCase() === codexActive.email.toLowerCase(),
+      );
+      if (isCodexA && !isCodexB) return -1;
+      if (!isCodexA && isCodexB) return 1;
+
       const rankA = getStatusRank(a);
       const rankB = getStatusRank(b);
       if (rankA !== rankB) {
@@ -205,13 +231,13 @@ export function AccountsGridPage() {
       }
 
       if (sortOption === "quota_desc") {
-        const qA = a.usage?.secondaryRemainingPercent ?? a.usage?.primaryRemainingPercent ?? 0;
-        const qB = b.usage?.secondaryRemainingPercent ?? b.usage?.primaryRemainingPercent ?? 0;
+        const qA = a.usage?.primaryRemainingPercent ?? a.usage?.secondaryRemainingPercent ?? 0;
+        const qB = b.usage?.primaryRemainingPercent ?? b.usage?.secondaryRemainingPercent ?? 0;
         return qB - qA;
       }
       if (sortOption === "quota_asc") {
-        const qA = a.usage?.secondaryRemainingPercent ?? a.usage?.primaryRemainingPercent ?? 0;
-        const qB = b.usage?.secondaryRemainingPercent ?? b.usage?.primaryRemainingPercent ?? 0;
+        const qA = a.usage?.primaryRemainingPercent ?? a.usage?.secondaryRemainingPercent ?? 0;
+        const qB = b.usage?.primaryRemainingPercent ?? b.usage?.secondaryRemainingPercent ?? 0;
         return qA - qB;
       }
       if (sortOption === "credits_desc") {
@@ -231,7 +257,7 @@ export function AccountsGridPage() {
     });
 
     return list;
-  }, [rawAccounts, search, statusFilter, planFilter, sortOption]);
+  }, [rawAccounts, search, statusFilter, planFilter, sortOption, codexActive]);
 
   // Reset pagination to page 0 whenever filter/search/sort changes
   useEffect(() => {
