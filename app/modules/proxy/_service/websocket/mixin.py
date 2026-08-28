@@ -4172,6 +4172,8 @@ class _WebSocketMixin:
                         error_type="server_error",
                     ),
                 ) from exc
+            if api_key is None:
+                raise _WebSocketTransientRefreshFailover(account.id) from exc
             await proxy._emit_websocket_connect_failure(
                 websocket,
                 client_send_lock=client_send_lock,
@@ -4288,6 +4290,8 @@ class _WebSocketMixin:
                         error_type="server_error",
                     ),
                 ) from refresh_exc
+            if api_key is None:
+                raise _WebSocketTransientRefreshFailover(account.id) from refresh_exc
             await proxy._emit_websocket_connect_failure(
                 websocket,
                 client_send_lock=client_send_lock,
