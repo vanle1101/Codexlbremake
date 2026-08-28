@@ -92,12 +92,13 @@ class CodexDesktopAutoSwitcher:
                 if not active_account:
                     return None
 
-                # 2. Kiểm tra mức sử dụng hiện tại
-                latest_usage: UsageHistory | None = await usage_repo.latest_entry_for_account(active_account.id)
-                used_percent = (
-                    float(latest_usage.used_percent) if latest_usage and latest_usage.used_percent is not None else 0.0
-                )
+                # 2. Kiểm tra mức sử dụng trực tiếp (Live Check) từ OpenAI
+                import httpx
 
+                from app.core.crypto import TokenEncryptor
+
+                enc = TokenEncryptor()
+                used_percent = 0.0
                 is_exhausted = (
                     active_account.status
                     in (
@@ -107,8 +108,36 @@ class CodexDesktopAutoSwitcher:
                         AccountStatus.REAUTH_REQUIRED,
                         AccountStatus.PAUSED,
                     )
-                    or used_percent >= self.threshold_percent
                 )
+
+                if not is_exhausted:
+                    try:
+                        token = enc.decrypt(active_account.access_token_encrypted)
+                        headers = {
+                            "Authorization": f"Bearer {token}",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        }
+                        if active_account.chatgpt_account_id:
+                            headers["ChatGPT-Account-Id"] = active_account.chatgpt_account_id
+                        async with httpx.AsyncClient(timeout=6.0, trust_env=False) as client:
+                            res = await client.get("https://chatgpt.com/backend-api/wham/usage", headers=headers)
+                            if res.status_code == 200:
+                                data = res.json()
+                                p_used = float(data.get("primary_window", {}).get("used_percent", 0))
+                                s_used = float(data.get("secondary_window", {}).get("used_percent", 0))
+                                used_percent = max(p_used, s_used)
+                                if used_percent >= self.threshold_percent:
+                                    is_exhausted = True
+                            elif res.status_code in (401, 403, 429):
+                                is_exhausted = True
+                                used_percent = 100.0
+                    except Exception as err:
+                        logger.debug(f"[Codex Auto-Rotate] Live check error for {active_account.email}: {err}")
+                        latest_usage: UsageHistory | None = await usage_repo.latest_entry_for_account(active_account.id)
+                        if latest_usage and latest_usage.used_percent is not None:
+                            used_percent = float(latest_usage.used_percent)
+                            if used_percent >= self.threshold_percent:
+                                is_exhausted = True
 
                 if not is_exhausted:
                     return None
