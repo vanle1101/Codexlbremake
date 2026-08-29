@@ -576,8 +576,8 @@ class AutoLoginService:
                     logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
                 return False
 
-            target_url = "https://chatgpt.com/auth/login"
-            self._log(f"[Luồng {worker_id}] Đang mở Web Auth ChatGPT ({acc.email})...")
+            target_url = auth_resp.authorization_url
+            self._log(f"[Luồng {worker_id}] Đang mở OAuth Codex ({acc.email})...")
             await page.goto(target_url, wait_until="domcontentloaded", timeout=35000)
             await asyncio.sleep(1.5)
 
