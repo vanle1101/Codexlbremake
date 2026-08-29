@@ -670,12 +670,8 @@ class AutoLoginService:
 
             if not password_ready:
                 try:
-                    await pass_input.wait_for(state="visible", timeout=3000)
+                    await pass_input.wait_for(state="visible", timeout=15000)
                 except Exception:
-                    if await _do_web_session_fallback():
-                        await context.close()
-                        await browser.close()
-                        return True, 1, None
                     raise ValueError("Không tìm thấy ô nhập mật khẩu (Timeout hoặc vướng Cloudflare)")
 
             await _fill_input_safely(page, pass_input, acc.password)
