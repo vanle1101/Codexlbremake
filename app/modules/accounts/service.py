@@ -527,13 +527,20 @@ class AccountsService:
         auth_file = codex_home / "auth.json"
         projection_file = codex_home / ".cockpit_codex_auth.json"
 
+        # Extract UUID chatgpt_account_id if available, never pass user-* id string as account_id
+        target_account_id = getattr(auth_data.account, "chatgpt_account_id", None)
+        if not target_account_id:
+            raw_acc = getattr(auth_data.account, "account_id", "") or ""
+            if raw_acc and not raw_acc.startswith("user-"):
+                target_account_id = raw_acc.split("_")[0]
+
         # Build auth.json payload for Codex CLI / Codex App
         payload = {
             "OPENAI_API_KEY": None,
             "last_refresh": datetime.now(timezone.utc).isoformat(),
             "tokens": {
                 "access_token": auth_data.codex_auth_json.tokens.access_token,
-                "account_id": auth_data.codex_auth_json.tokens.account_id,
+                "account_id": target_account_id,
                 "id_token": auth_data.codex_auth_json.tokens.id_token,
                 "refresh_token": auth_data.codex_auth_json.tokens.refresh_token,
             },
@@ -552,32 +559,7 @@ class AccountsService:
         }
         projection_file.write_text(json.dumps(projection, indent=2), encoding="utf-8")
 
-        logger.info(f"Switched Codex active account to: {auth_data.account.email} (id: {auth_data.account.account_id})")
-
-        # Terminate running ChatGPT Desktop App and restart it with the new auth.json
-        async def _restart_app():
-            try:
-                import subprocess
-                import asyncio
-                # Force kill running ChatGPT instances so it re-reads auth.json on launch
-                subprocess.run(
-                    ["taskkill", "/F", "/T", "/IM", "ChatGPT.exe"],
-                    capture_output=True,
-                    check=False,
-                )
-                # Wait longer to ensure Chrome profile locks are released
-                await asyncio.sleep(2.0)
-                # Launch fresh ChatGPT Desktop App with new auth tokens
-                subprocess.Popen(
-                    "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
-                    shell=True,
-                )
-            except Exception as e:
-                logger.debug(f"Failed to restart ChatGPT Desktop app: {e}")
-
-        # Run in background so it doesn't block the API response (prevents UI lag)
-        import asyncio
-        asyncio.create_task(_restart_app())
+        logger.info(f"Switched Codex active account to: {auth_data.account.email} (chatgpt_id: {target_account_id})")
 
         return SwitchToCodexResponse(
             status="success",
