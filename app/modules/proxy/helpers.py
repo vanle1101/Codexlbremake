@@ -95,7 +95,7 @@ def classify_upstream_failure(
 def _header_account_id(account_id: str | None) -> str | None:
     if not account_id:
         return None
-    if account_id.startswith(("email_", "local_")):
+    if account_id.startswith(("email_", "local_", "user-", "user_")):
         return None
     return account_id
 
