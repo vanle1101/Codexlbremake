@@ -529,9 +529,11 @@ class AccountsService:
 
         # Extract UUID chatgpt_account_id if available, never pass user-* id string as account_id
         target_account_id = getattr(auth_data.account, "chatgpt_account_id", None)
+        if target_account_id and str(target_account_id).startswith("user-"):
+            target_account_id = None
         if not target_account_id:
             raw_acc = getattr(auth_data.account, "account_id", "") or ""
-            if raw_acc and not raw_acc.startswith("user-"):
+            if raw_acc and not str(raw_acc).startswith("user-"):
                 target_account_id = raw_acc.split("_")[0]
 
         # Build auth.json payload for Codex CLI / Codex App
