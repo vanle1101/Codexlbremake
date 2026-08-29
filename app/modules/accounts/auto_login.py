@@ -608,7 +608,7 @@ class AutoLoginService:
             await _solve_turnstile(page)
 
             continue_btn = page.locator(
-                'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                'button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục"), button[name="action"][value="default"], button.continue-btn, button[data-dd-action-name="Continue"]'
             ).first
             try:
                 if await continue_btn.is_visible():
@@ -621,7 +621,7 @@ class AutoLoginService:
 
             # Step B: Password (with self-healing re-click & turnstile resolution)
             self._log(f"[Luồng {worker_id}] Đang điền mật khẩu cho {acc.email}...")
-            pass_input = page.locator('input[name="password"], input#password, input[type="password"]').first
+            pass_input = page.locator('input[name="password"], input#password, input[type="password"], input[autocomplete="current-password"]').first
 
             password_ready = False
             for retry_i in range(18):
@@ -659,7 +659,7 @@ class AutoLoginService:
                 if retry_i in (2, 5, 9, 13):
                     try:
                         btn = page.locator(
-                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                            'button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục"), button[name="action"][value="default"], button.continue-btn'
                         ).first
                         if await btn.is_visible():
                             await btn.click(timeout=1500)
@@ -678,7 +678,7 @@ class AutoLoginService:
             await _solve_turnstile(page)
 
             submit_btn = page.locator(
-                'button[type="submit"][name="action"][value="default"], button.continue-btn'
+                'button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục"), button[name="action"][value="default"], button.continue-btn, button[data-dd-action-name="Continue"]'
             ).first
             try:
                 if await submit_btn.is_visible():
