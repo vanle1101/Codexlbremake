@@ -659,7 +659,7 @@ def _build_upstream_websocket_headers(
     if normalize_non_native_fingerprint and not native:
         _normalize_non_native_upstream_fingerprint(headers)
     headers["Authorization"] = f"Bearer {access_token}"
-    if account_id:
+    if account_id and not str(account_id).startswith("user-"):
         if native:
             headers["chatgpt-account-id"] = account_id
         else:

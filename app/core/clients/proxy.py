@@ -755,7 +755,7 @@ def _build_upstream_headers(
     headers["Authorization"] = f"Bearer {access_token}"
     headers["Accept"] = accept
     headers["Content-Type"] = "application/json"
-    if account_id:
+    if account_id and not str(account_id).startswith(("email_", "local_", "user-", "user_")):
         if native:
             headers["chatgpt-account-id"] = account_id
         else:
@@ -817,7 +817,7 @@ def _build_upstream_websocket_headers(
     if not native:
         _normalize_non_native_upstream_fingerprint(headers)
     headers["Authorization"] = f"Bearer {access_token}"
-    if account_id:
+    if account_id and not str(account_id).startswith(("email_", "local_", "user-", "user_")):
         if native:
             headers["chatgpt-account-id"] = account_id
         else:

@@ -22,7 +22,7 @@ def build_chatgpt_auth_headers(
     request_id = get_request_id()
     if request_id:
         headers["x-request-id"] = request_id
-    if account_id and not account_id.startswith(("email_", "local_")):
+    if account_id and not account_id.startswith(("email_", "local_", "user-", "user_")):
         headers["chatgpt-account-id"] = account_id
     if extra:
         headers.update(extra)
