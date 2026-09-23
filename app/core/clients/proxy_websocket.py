@@ -931,6 +931,7 @@ async def _connect_upstream_websocket(
             additional_headers=upstream_headers or None,
             user_agent_header=user_agent,
             open_timeout=settings.upstream_connect_timeout_seconds,
+            ping_interval=None,
             ping_timeout=ping_timeout,
             max_size=settings.max_sse_event_bytes,
             proxy=proxy_url,

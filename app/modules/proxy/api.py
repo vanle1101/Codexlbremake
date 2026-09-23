@@ -3891,7 +3891,7 @@ def _to_codex_model_entry(model: UpstreamModel, *, visibility: str | None = None
         supported_reasoning_levels=reasoning_levels,
         supported_in_api=model.supported_in_api,
         priority=model.priority,
-        minimal_client_version=model.minimal_client_version,
+        minimal_client_version="0.144.0" if model.slug == "gpt-6-astra" else model.minimal_client_version,
         supports_reasoning_summaries=model.supports_reasoning_summaries,
         support_verbosity=model.support_verbosity,
         default_verbosity=model.default_verbosity,

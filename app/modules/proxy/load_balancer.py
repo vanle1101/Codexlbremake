@@ -2377,7 +2377,16 @@ def _state_from_account(
 
     # Use account.reset_at from DB as the authoritative source for runtime reset
     # and to survive process restarts.
-    persisted_reset_at = float(account.reset_at) if account.reset_at is not None else None
+    persisted_reset_at = None
+    if account.reset_at is not None:
+        try:
+            persisted_reset_at = float(account.reset_at)
+        except (ValueError, TypeError):
+            try:
+                from datetime import datetime
+                persisted_reset_at = datetime.fromisoformat(str(account.reset_at)).timestamp()
+            except Exception:
+                persisted_reset_at = None
     runtime_reset_at = runtime.reset_at
     # Validate only future RATE_LIMITED hints. Elapsed deadlines must still
     # reach apply_usage_quota's ordinary expiry transition, and QUOTA_EXCEEDED

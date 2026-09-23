@@ -137,3 +137,25 @@ These rules encode recurring review blockers observed across codex-lb PRs.
   `simplicity-budget-approved` label; feature documentation goes to `docs/` +
   openspec (never new README sections); dashboard-visible PRs include
   before/after screenshots.
+
+## Antigravity Automation: Log Acc & Khởi Chạy Codex (100% Local - No VPS - No API Key)
+
+Khi người dùng yêu cầu **"log acc và khởi chạy codex lên cho t"** (hoặc cung cấp danh sách tài khoản GPT kèm yêu cầu đăng nhập / mở Codex):
+- **Phạm vi:** Chạy 100% Local trên máy tính hiện tại. **KHÔNG liên quan VPS, KHÔNG cần API key.**
+- **Cách Antigravity xử lý:**
+  1. Trích xuất danh sách tài khoản từ nội dung tin nhắn của người dùng (định dạng: `email password 2fa_secret`).
+  2. Ghi tạm danh sách tài khoản vào file tạm `temp_accounts.txt`.
+  3. Chạy script tự động hóa:
+     ```bash
+     python scripts/auto_codex_workflow.py --file temp_accounts.txt
+     ```
+     Script sẽ tự động:
+     - Đăng nhập tài khoản vào proxy local `~/.codex-lb/store.db`.
+     - Cập nhật token hợp lệ vào `~/.codex/auth.json`.
+     - Cấu hình `~/.codex/config.toml` trỏ về `http://127.0.0.1:2455/backend-api/codex` (chế độ không cần API key).
+     - Gắn lệnh `codex` vào PATH nếu chưa có.
+     - Khởi động dịch vụ proxy local `codex-lb` ngầm trên cổng 2455.
+     - Bật cửa sổ PowerShell tương tác `codex` và mở app ChatGPT Desktop.
+  4. Xóa ngay file tạm `temp_accounts.txt`.
+  5. Báo cáo kết quả số tài khoản đã nạp và xác nhận Codex đã sẵn sàng sử dụng.
+

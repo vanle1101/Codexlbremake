@@ -123,10 +123,13 @@ class CodexDesktopAutoSwitcher:
                             res = await client.get("https://chatgpt.com/backend-api/wham/usage", headers=headers)
                             if res.status_code == 200:
                                 data = res.json()
-                                p_used = float(data.get("primary_window", {}).get("used_percent", 0))
-                                s_used = float(data.get("secondary_window", {}).get("used_percent", 0))
-                                used_percent = max(p_used, s_used)
-                                if used_percent >= self.threshold_percent:
+                                rl = data.get("rate_limit") or {}
+                                limit_reached = rl.get("limit_reached", False)
+                                allowed = rl.get("allowed", True)
+                                pw = rl.get("primary_window") or {}
+                                p_used = float(pw.get("used_percent", 0))
+                                used_percent = p_used
+                                if limit_reached or not allowed or p_used >= self.threshold_percent:
                                     is_exhausted = True
                             elif res.status_code in (401, 403, 429):
                                 is_exhausted = True
@@ -142,18 +145,37 @@ class CodexDesktopAutoSwitcher:
                 if not is_exhausted:
                     return None
 
+                # Don't switch faster than once every 60s unless critical error
+                if self._last_switch_time and (time.time() - self._last_switch_time < 60):
+                    return None
+
                 logger.info(
                     f"[Codex Auto-Rotate] ⚠️ Tài khoản {active_account.email} đã dùng {used_percent:.1f}% hạn mức "
                     f"(Ngưỡng kích hoạt: {self.threshold_percent}% - Còn <= 2%). Bắt đầu tìm tài khoản thay thế..."
                 )
 
-                # 3. Tìm các tài khoản ACTIVE còn nhiều hạn mức nhất
+                # 3. Tìm các tài khoản ACTIVE còn nhiều hạn mức nhất (chỉ Codex OAuth Plus)
                 all_accounts = await accounts_repo.list_accounts()
-                candidates = [
-                    a
-                    for a in all_accounts
-                    if a.id != active_account.id and a.status == AccountStatus.ACTIVE and a.tokens_enc
-                ]
+                candidates = []
+                for a in all_accounts:
+                    if (
+                        a.id != active_account.id
+                        and a.status == AccountStatus.ACTIVE
+                        and a.access_token_encrypted
+                        and a.plan_type == "plus"
+                    ):
+                        try:
+                            raw_tok = enc.decrypt(a.access_token_encrypted)
+                            parts = raw_tok.split(".")
+                            if len(parts) >= 2:
+                                import base64
+
+                                padded = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
+                                claims = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+                                if claims.get("client_id") == "app_EMoamEEZ73f0CkXaXp7hrann":
+                                    candidates.append(a)
+                        except Exception:
+                            pass
 
                 if not candidates:
                     logger.warning("[Codex Auto-Rotate] ❌ Không còn tài khoản ACTIVE nào khả dụng để đổi!")

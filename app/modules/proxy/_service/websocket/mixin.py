@@ -4483,6 +4483,7 @@ class _WebSocketMixin:
                         error_type="server_error",
                     ),
                 ) from exc
+            _facade().logger.info("Connecting upstream websocket account=%s account_id=%s headers=%s", account.id, account_id, headers)
             upstream = await _facade()._call_with_supported_optional_kwargs(
                 _facade().connect_responses_websocket,
                 headers,

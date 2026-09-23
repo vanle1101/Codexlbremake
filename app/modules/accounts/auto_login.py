@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -398,186 +400,11 @@ class AutoLoginService:
             page = await context.new_page()
 
             async def _do_web_session_fallback() -> bool:
-                self._log(f"[Luồng {worker_id}] ⚠️ Đang tự động chuyển sang Web Session login cho {acc.email}...")
-                try:
-                    await page.goto("https://chatgpt.com", wait_until="domcontentloaded", timeout=30000)
-                    await asyncio.sleep(1.5)
-
-                    # Check for Cloudflare Challenge
-                    try:
-                        await _solve_turnstile(page)
-                    except Exception:
-                        pass
-
-                    email_inp_web = page.locator(
-                        'input[name="username"], input#username, input[type="email"], input[name="email"]'
-                    ).first
-
-                    for _ in range(8):
-                        if await email_inp_web.is_visible():
-                            break
-                        try:
-                            btn = page.locator('[data-testid="login-button"]').first
-                            try:
-                                await btn.click(timeout=2000, force=True)
-                                self._log(f"[Luồng {worker_id}] Clicked Log in button (testid) (force)")
-                                await asyncio.sleep(2)
-                                break
-                            except Exception:
-                                pass
-                        except Exception as e:
-                            self._log(f"Login click err: {e}")
-                            pass
-                        await asyncio.sleep(1)
-
-                    self._log(f"[Luồng {worker_id}] Web Session: Waiting for email input...")
-                    for _ in range(15):
-                        try:
-                            await _solve_turnstile(page)
-                        except Exception:
-                            pass
-                        if await email_inp_web.is_visible():
-                            break
-                        await asyncio.sleep(1.5)
-
-                    if await email_inp_web.is_visible():
-                        self._log(f"[Luồng {worker_id}] Web Session: Điền email {acc.email}...")
-                        await _fill_input_safely(page, email_inp_web, acc.email)
-                        await _solve_turnstile(page)
-                        submit_btn = page.locator(
-                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
-                        ).first
-                        if await submit_btn.is_visible():
-                            await submit_btn.click()
-                        else:
-                            await page.keyboard.press("Enter")
-                        await asyncio.sleep(1.5)
-                    else:
-                        self._log(f"[Luồng {worker_id}] Web Session: Timeout waiting for email input!")
-
-                    # Wait for password input & resolve Turnstile
-                    pass_inp_web = page.locator(
-                        'input[name="password"], input#password, input[type="password"]:not([aria-hidden="true"])'
-                    ).first
-                    pass_found = False
-                    self._log(f"[Luồng {worker_id}] Web Session: Waiting for password input...")
-                    for _ in range(15):
-                        try:
-                            await _solve_turnstile(page)
-                        except Exception:
-                            pass
-                        if await pass_inp_web.is_visible():
-                            pass_found = True
-                            break
-                        # If still stuck on email step, re-submit
-                        btn = page.locator(
-                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
-                        ).first
-                        if await btn.is_visible() and await email_inp_web.is_visible():
-                            try:
-                                await btn.click(timeout=1500)
-                            except Exception:
-                                pass
-                        await asyncio.sleep(1)
-
-                    if pass_found:
-                        self._log(f"[Luồng {worker_id}] Web Session: Điền mật khẩu cho {acc.email}...")
-                        await _fill_input_safely(page, pass_inp_web, acc.password)
-                        await _solve_turnstile(page)
-                        submit_btn = page.locator(
-                            'button[type="submit"][name="action"][value="default"], button.continue-btn'
-                        ).first
-                        if await submit_btn.is_visible():
-                            await submit_btn.click()
-                        else:
-                            await page.keyboard.press("Enter")
-                        await asyncio.sleep(2)
-                    else:
-                        self._log(f"[Luồng {worker_id}] Web Session: Timeout waiting for password input!")
-
-                    # Wait for OTP or landing
-                    otp_inp_web = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
-                    for _ in range(10):
-                        try:
-                            await _solve_turnstile(page)
-                        except Exception:
-                            pass
-                        if await otp_inp_web.is_visible():
-                            if acc.two_factor_secret:
-                                clean_sec = acc.two_factor_secret.replace(" ", "")
-                                try:
-                                    code = pyotp.TOTP(clean_sec).now()
-                                    self._log(f"[Luồng {worker_id}] Điền OTP Web: {code}...")
-                                    await otp_inp_web.fill(code)
-                                    await asyncio.sleep(0.2)
-                                    await page.keyboard.press("Enter")
-                                except Exception as totp_err:
-                                    logger.warning(f"Lỗi tạo OTP Web: {totp_err}")
-                            break
-                        if "chatgpt.com" in page.url and "auth" not in page.url:
-                            break
-                        await asyncio.sleep(1)
-
-                    # Wait for landing on chatgpt.com
-                    for _ in range(20):
-                        try:
-                            await _solve_turnstile(page)
-                        except Exception:
-                            pass
-                        if "chatgpt.com" in page.url and "auth" not in page.url and "login" not in page.url:
-                            break
-                        await asyncio.sleep(1)
-
-                    # Extract Web Session with retry loop using in-page fetch
-                    for _ in range(15):
-                        try:
-                            session_json = await page.evaluate("""async () => {
-                                try {
-                                    const res = await fetch('/api/auth/session');
-                                    return await res.json();
-                                } catch (e) {
-                                    return null;
-                                }
-                            }""")
-                            if isinstance(session_json, dict) and session_json.get("accessToken"):
-                                access_token = session_json["accessToken"]
-                                user = session_json.get("user") or {}
-                                auth_data = {
-                                    "OPENAI_API_KEY": None,
-                                    "tokens": {
-                                        "access_token": access_token,
-                                        "refresh_token": access_token,
-                                        "id_token": access_token,
-                                        "account_id": user.get("id"),
-                                    },
-                                    "last_refresh": session_json.get("expires"),
-                                }
-                                auth_bytes = json.dumps(auth_data).encode("utf-8")
-
-                                from app.db.session import get_background_session
-                                from app.modules.accounts.repository import AccountsRepository
-                                from app.modules.accounts.service import AccountsService
-                                from app.modules.usage.repository import UsageRepository
-
-                                async with get_background_session() as db_session:
-                                    accounts_repo = AccountsRepository(db_session)
-                                    usage_repo = UsageRepository(db_session)
-                                    service = AccountsService(repo=accounts_repo, usage_repo=usage_repo)
-                                    await service.import_account(auth_bytes)
-                                self._log(
-                                    f"🎉 [Luồng {worker_id}] Đã lấy Web Session (/api/auth/session) & nạp auth.json thành công cho {acc.email}!",
-                                    level="success",
-                                )
-                                return True
-                        except Exception as eval_err:
-                            logger.debug("Session extraction attempt: %s", eval_err)
-                        await asyncio.sleep(1.5)
-                except Exception as fallback_err:
-                    logger.warning(f"Web session fallback error for {acc.email}: {fallback_err}")
+                self._log(f"[Luồng {worker_id}] ⚠️ Bỏ qua Web Session login cho {acc.email} (Web Session không hỗ trợ Codex Desktop WebSocket).")
                 return False
 
             target_url = auth_resp.authorization_url
-            self._log(f"[Luồng {worker_id}] Đang mở OAuth Codex ({acc.email})...")
+            self._log(f"[Luồng {worker_id}] Đang mở trang xác thực Codex OAuth ({acc.email})...")
             await page.goto(target_url, wait_until="domcontentloaded", timeout=35000)
             await asyncio.sleep(1.5)
 
@@ -831,14 +658,20 @@ class AutoLoginService:
                     except Exception:
                         pass
 
-                # Check Consent / Authorize
+                # Check Consent / Authorize / Continue on sign-in-with-chatgpt/codex/consent
                 try:
-                    consent_btn = page.locator(
-                        'button:has-text("Authorize"), button:has-text("Allow"), button:has-text("Uỷ quyền"), button:has-text("Accept"), button:has-text("Grant"), button[name="action"][value="accept"], button[data-testid="consent-grant-button"]'
-                    ).first
-                    if await consent_btn.is_visible():
-                        self._log(f"[Luồng {worker_id}] Tự động bấm Authorize/Uỷ quyền...")
-                        await consent_btn.click()
+                    if "/consent" in current_url or await page.locator('text="Select a workspace"').count() > 0:
+                        cont_btn = page.locator('button:has-text("Continue"), button[type="submit"]:has-text("Continue"), button:has-text("Tiếp tục")').first
+                        if await cont_btn.is_visible():
+                            self._log(f"[Luồng {worker_id}] Tự động bấm Continue trên trang Consent...")
+                            await cont_btn.click()
+                    else:
+                        consent_btn = page.locator(
+                            'button:has-text("Authorize"), button:has-text("Allow"), button:has-text("Uỷ quyền"), button:has-text("Accept"), button:has-text("Grant"), button[name="action"][value="accept"], button[data-testid="consent-grant-button"]'
+                        ).first
+                        if await consent_btn.is_visible():
+                            self._log(f"[Luồng {worker_id}] Tự động bấm Authorize/Uỷ quyền...")
+                            await consent_btn.click()
                 except Exception:
                     pass
 
@@ -1140,7 +973,7 @@ class AutoLoginService:
 
         async with get_background_session() as db_session:
             stmt = select(Account.id, Account.email).where(
-                Account.status.in_([AccountStatus.REAUTH_REQUIRED, AccountStatus.DEACTIVATED])
+                Account.status.in_([AccountStatus.REAUTH_REQUIRED])
             )
             result = await db_session.execute(stmt)
             accounts_401_data = [(str(row[0]), str(row[1])) for row in result.all()]
@@ -1233,26 +1066,8 @@ class AutoLoginService:
 
     def start_background_watchdog(self) -> None:
         """Start a background daemon that periodically auto-recovers 401 accounts."""
-        if hasattr(self, "_watchdog_task") and self._watchdog_task and not self._watchdog_task.done():
-            return
-
-        async def _watchdog_loop():
-            from app.db.session import get_background_session
-            from app.modules.accounts.repository import AccountsRepository
-            from app.modules.oauth.service import OauthService
-
-            while True:
-                await asyncio.sleep(40)
-                try:
-                    if self._status != "running":
-                        async with get_background_session() as db_session:
-                            repo = AccountsRepository(db_session)
-                            oauth_service = OauthService(accounts_repo=repo)
-                            await self.auto_reauth_all_401(oauth_service=oauth_service, concurrency=2)
-                except Exception as e:
-                    logger.debug("Auto-reauth watchdog tick error: %s", e)
-
-        self._watchdog_task = asyncio.create_task(_watchdog_loop())
+        # Disabled automatic background browser loop to avoid freezing the proxy event loop
+        return
 
     def trigger_auto_reauth_soon(self) -> None:
         """Trigger background 401 recovery immediately."""

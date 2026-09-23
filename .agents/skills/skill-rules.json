@@ -67,6 +67,32 @@
         "envOverride": "SKIP_CONVENTION_GUARD"
       },
       "blockMessage": "BLOCKED: Run /project-conventions first.\nYou must review project conventions before editing code.\n\n→ Skill tool: 'project-conventions'\n→ Bypass: SKIP_CONVENTION_GUARD=1"
+    },
+    "auto-codex-workflow": {
+      "type": "domain",
+      "enforcement": "suggest",
+      "priority": "critical",
+      "description": "Tự động đăng nhập tài khoản GPT và khởi chạy Codex trên máy local (100% Local, không cần VPS, không cần API Key)",
+      "promptTriggers": {
+        "keywords": [
+          "log acc",
+          "khởi chạy codex",
+          "mở codex",
+          "log và mở codex",
+          "nạp acc codex",
+          "đăng nhập acc codex",
+          "auto login codex"
+        ],
+        "intentPatterns": [
+          ".*(log|đăng nhập|nạp).*acc.*(khởi chạy|mở|bật).*codex.*",
+          ".*(khởi chạy|mở|bật).*codex.*(log|đăng nhập).*"
+        ]
+      },
+      "fileTriggers": {
+        "pathPatterns": [],
+        "pathExclusions": [],
+        "contentPatterns": []
+      }
     }
   }
 }

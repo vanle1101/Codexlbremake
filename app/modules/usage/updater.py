@@ -1333,14 +1333,22 @@ def _account_needs_post_reset_refresh(account: Account, *, latest: UsageHistory 
         return False
     if account.reset_at is None:
         return False
-    if time.time() < account.reset_at:
+    try:
+        reset_at_val = float(account.reset_at)
+    except (ValueError, TypeError):
+        try:
+            from datetime import datetime
+            reset_at_val = datetime.fromisoformat(str(account.reset_at)).timestamp()
+        except Exception:
+            return False
+    if time.time() < reset_at_val:
         return False
     if latest is None:
         return True
     recorded_at = latest.recorded_at
     if recorded_at.tzinfo is None:
         recorded_at = recorded_at.replace(tzinfo=timezone.utc)
-    return recorded_at.timestamp() < float(account.reset_at)
+    return recorded_at.timestamp() < reset_at_val
 
 
 def _parse_credits_balance(value: str | int | float | None) -> float | None:
