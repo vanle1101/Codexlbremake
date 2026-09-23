@@ -197,6 +197,12 @@ class AccountsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_email(self, email: str) -> Account | None:
+        result = await self._session.execute(
+            select(Account).where(Account.email == email, Account.delete_requested_at.is_(None))
+        )
+        return result.scalar_one_or_none()
+
     async def list_accounts(self, *, refresh_existing: bool = False) -> list[Account]:
         # Accounts marked for background deletion are already deleted from the
         # operator's point of view: they never appear in listings (dashboard,
