@@ -1413,8 +1413,8 @@ class AccountsRepository:
             if matched := result.scalar_one_or_none():
                 return matched
 
-        # 2. Match by chatgpt_account_id and workspace slot
-        if account.chatgpt_account_id:
+        # 2. Match by chatgpt_account_id and workspace slot ONLY if incoming email is not known
+        if account.chatgpt_account_id and (not account.email or account.email == "unknown@example.com"):
             stmt = select(Account).where(Account.chatgpt_account_id == account.chatgpt_account_id)
             if account.workspace_id:
                 stmt = stmt.where(Account.workspace_id == account.workspace_id)
