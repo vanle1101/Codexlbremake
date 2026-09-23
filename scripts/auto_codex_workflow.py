@@ -111,136 +111,35 @@ async def solve_turnstile(page: Any) -> bool:
     return False
 
 
-async def login_single_account(account: dict[str, str]) -> bool:
+from app.modules.accounts.auto_login import AutoLoginService
+from app.modules.accounts.schemas import AutoLoginAccountItem
+
+
+async def login_single_account(
+    account: dict[str, str],
+    p: Any,
+    svc: AutoLoginService,
+    oauth_service: OauthService,
+) -> bool:
     email = account["email"]
     password = account["password"]
     totp_secret = account["two_factor_secret"]
 
     print(f"\n🔐 Đang tiến hành đăng nhập tài khoản: {email}")
+    acc_item = AutoLoginAccountItem(email=email, password=password, two_factor_secret=totp_secret)
+    svc.save_credential(email, password, totp_secret)
+    try:
+        ok, ws, err = await svc._login_attempt(p, acc_item, oauth_service, workspace_index=0, worker_id=1)
+        if ok:
+            print(f"✅ Đăng nhập THÀNH CÔNG: {email}")
+            return True
+        else:
+            print(f"⚠️ Đăng nhập thất bại ({email}): {err}")
+            return False
+    except Exception as e:
+        print(f"❌ Lỗi khi đăng nhập {email}: {e}")
+        return False
 
-    async with async_playwright() as p:
-        async with get_background_session() as session:
-            accounts_repo = AccountsRepository(session)
-            oauth_service = OauthService(accounts_repo, repo_factory=_accounts_repo_context)
-
-            auth_resp = await oauth_service.start_oauth(OauthStartRequest(force_method="browser"))
-
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                ],
-            )
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
-                locale="en-US",
-            )
-            await context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                window.chrome = { runtime: {} };
-            """)
-
-            page = await context.new_page()
-            try:
-                await page.goto(auth_resp.authorization_url, wait_until="domcontentloaded", timeout=40000)
-                await asyncio.sleep(1.5)
-
-                # 1. Fill Username/Email
-                email_input = page.locator('input[name="username"]:visible, input#username:visible, input[type="email"]:visible').first
-                await email_input.wait_for(state="visible", timeout=15000)
-                await email_input.fill(email)
-                await solve_turnstile(page)
-
-                cont_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
-                try:
-                    if await cont_btn.is_visible():
-                        await cont_btn.click()
-                    else:
-                        await page.keyboard.press("Enter")
-                except Exception:
-                    await page.keyboard.press("Enter")
-                await asyncio.sleep(1.5)
-
-                # 2. Fill Password
-                pass_input = page.locator('input[name="password"], input#password, input[type="password"]').first
-                for _ in range(15):
-                    if await pass_input.is_visible():
-                        break
-                    await solve_turnstile(page)
-                    await asyncio.sleep(1)
-
-                await pass_input.wait_for(state="visible", timeout=15000)
-                await pass_input.fill(password)
-                await solve_turnstile(page)
-
-                sub_btn = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Tiếp tục")').first
-                try:
-                    if await sub_btn.is_visible():
-                        await sub_btn.click()
-                    else:
-                        await page.keyboard.press("Enter")
-                except Exception:
-                    await page.keyboard.press("Enter")
-                await asyncio.sleep(2)
-
-                # 3. Handle 2FA / Authorize loop
-                success = False
-                for step in range(35):
-                    cur_url = page.url
-                    if "/auth/callback" in cur_url:
-                        for _ in range(15):
-                            st = await oauth_service.oauth_status(auth_resp.flow_id)
-                            if st.status == "success":
-                                success = True
-                                break
-                            await asyncio.sleep(1)
-                        break
-
-                    await solve_turnstile(page)
-
-                    if "/add-phone" in cur_url or await page.locator('text="Phone number required"').count() > 0:
-                        print(f"⚠️ {email}: OpenAI bắt buộc thêm Số Điện Thoại!")
-                        break
-
-                    if await page.locator('text="Incorrect code"').count() > 0 or await page.locator('text="Mã không hợp lệ"').count() > 0:
-                        print(f"❌ {email}: Sai mã 2FA / 2FA bị đổi!")
-                        break
-
-                    body_text = await page.locator("body").inner_text()
-                    if "account_deactivated" in body_text or "deleted or deactivated" in body_text:
-                        print(f"❌ {email}: Tài khoản đã bị vô hiệu hóa bởi OpenAI!")
-                        break
-
-                    # Enter OTP
-                    otp_input = page.locator('input[name="code"], input#code, input[inputmode="numeric"]').first
-                    if await otp_input.is_visible():
-                        code = pyotp.TOTP(totp_secret).now()
-                        await otp_input.fill(code)
-                        await asyncio.sleep(0.3)
-                        await page.keyboard.press("Enter")
-                        await asyncio.sleep(1)
-
-                    # Authorize
-                    for b_txt in ["Authorize", "Allow", "Continue"]:
-                        b = page.locator(f'button:has-text("{b_txt}")').first
-                        if await b.is_visible():
-                            await b.click(timeout=1500)
-                            break
-
-                    await asyncio.sleep(1.5)
-
-                if success:
-                    print(f"✅ Đăng nhập THÀNH CÔNG: {email}")
-                    return True
-                else:
-                    print(f"⚠️ Đăng nhập chưa thành công: {email}")
-                    return False
-            finally:
-                await browser.close()
 
 
 def setup_codex_auth_json() -> str | None:
@@ -455,12 +354,19 @@ async def main_async(accounts_text: str) -> None:
     await init_http_client()
     try:
         success_count = 0
-        for acc in accounts:
-            ok = await login_single_account(acc)
-            if ok:
-                success_count += 1
-                # Nếu đã có ít nhất 1 tài khoản active, có thể thiết lập ngay
-                setup_codex_auth_json()
+        async with async_playwright() as p:
+            async with get_background_session() as session:
+                accounts_repo = AccountsRepository(session)
+                oauth_service = OauthService(accounts_repo, repo_factory=_accounts_repo_context)
+                svc = AutoLoginService()
+                svc._headless = True
+
+                for acc in accounts:
+                    ok = await login_single_account(acc, p, svc, oauth_service)
+                    if ok:
+                        success_count += 1
+                        # Nếu đã có ít nhất 1 tài khoản active, có thể thiết lập ngay
+                        setup_codex_auth_json()
 
         print(f"\n✨ Kết quả: Đăng nhập thành công {success_count}/{len(accounts)} tài khoản.")
     finally:
